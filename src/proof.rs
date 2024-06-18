@@ -19,7 +19,7 @@ use crate::{
     net::connect_lightwalletd,
     parse_ballot,
     path::calculate_merkle_paths,
-    prevhash::{fetch_tree_state, PreviousHashes},
+    prevhash::fetch_tree_state,
     vote_generated::fb::{
         BallotEnvelopeT, BallotT, BallotWitnessT, HeaderT, InputT, ProofT, SignatureT,
     },
@@ -95,7 +95,7 @@ pub async fn create_ballot<R: RngCore + CryptoRng>(
     let hashes = rows.collect::<Result<Vec<_>, _>>()?;
 
     let positions = notes.iter().map(|n| n.position).collect::<Vec<_>>();
-    let cmx_paths = calculate_merkle_paths(&ph, &positions, &hashes)?;
+    let cmx_paths = calculate_merkle_paths(ph.position(), &positions, &hashes)?;
 
     log::info!("Building nf tree...");
     s = connection.prepare("SELECT hash FROM nullifiers ORDER BY revhash")?;
@@ -104,13 +104,24 @@ pub async fn create_ballot<R: RngCore + CryptoRng>(
         Ok(Fp::from_repr(h).unwrap())
     })?;
     let mut nfs = vec![];
-    nfs.push(Fp::zero());
+    let mut prev = Fp::zero();
     for r in rows {
         let r = r?;
-        nfs.push(r - Fp::one());
-        nfs.push(r + Fp::one());
+        // Skip empty ranges when nullifiers are consecutive
+        // (with very low odds)
+        if prev < r {
+            // Ranges are inclusive of both ends
+            nfs.push(prev);
+            nfs.push(r - Fp::one());
+
+        }
+        prev = r + Fp::one();
     }
-    nfs.push(Fp::one().neg());
+    if prev != Fp::zero() { // overflow when a nullifier == max
+        nfs.push(prev);
+        nfs.push(Fp::one().neg());
+    }
+
     for n in notes.iter_mut() {
         let NotePosition { note, .. } = n;
         let nf: Nullifier = note.nullifier(&fvk);
@@ -126,7 +137,7 @@ pub async fn create_ballot<R: RngCore + CryptoRng>(
 
     let positions = notes.iter().map(|n| n.nf_position).collect::<Vec<_>>();
     let nfs = nfs.iter().map(|nf| nf.to_repr()).collect::<Vec<_>>();
-    let nf_paths = calculate_merkle_paths(&PreviousHashes::default(), &positions, &nfs)?;
+    let nf_paths = calculate_merkle_paths(0, &positions, &nfs)?;
 
     let domain = orchard::pob::domain(e.name.as_bytes());
     // let sk = Fp::one().to_repr();
@@ -269,14 +280,18 @@ pub fn validate_proof(proof_bytes: &[u8], domain: Fp, election: &Election) -> Re
         let data = p.data.as_ref().unwrap();
         let zkproof = Proof::new(data.clone());
         let rk: VerificationKey<SpendAuth> = i.rk.try_into().unwrap();
+        let mut cmx_bytes = hex::decode(&cmx_root).unwrap();
+        cmx_bytes.reverse();
+        let mut nf_bytes = hex::decode(&nf_root).unwrap();
+        nf_bytes.reverse();
         let proof_public = ProofBalancePublic {
             cv: ValueCommitment::from_bytes(&i.cv).unwrap(),
             domain_nf: Nullifier::from_bytes(&i.nf).unwrap(),
             rk,
             proof: zkproof,
-            cmx_root: Anchor::from_bytes(hex::decode(&cmx_root).unwrap().try_into().unwrap())
+            cmx_root: Anchor::from_bytes(cmx_bytes.try_into().unwrap())
                 .unwrap(),
-            nf_root: Anchor::from_bytes(hex::decode(&nf_root).unwrap().try_into().unwrap())
+            nf_root: Anchor::from_bytes(nf_bytes.try_into().unwrap())
                 .unwrap(),
         };
 
