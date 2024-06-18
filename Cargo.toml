@@ -1,0 +1,29 @@
+[package]
+name = "zcash-vote"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.40"
+log = "0.4.14"
+futures = "0.3.30"
+futures-core = "0.3.30"
+hex = "0.4.3"
+orchard = "0.3.0"
+prost = "0.10.3"
+tokio = { version = "1.6", features = ["rt-multi-thread", "tokio-macros"] }
+tonic = { version = "0.7.2", features = ["tls", "tls-roots"] }
+rusqlite = { version = "0.29.0", features = ["bundled"] }
+r2d2_sqlite = "0.22"
+r2d2 = "0.8"
+pasta_curves = "0.5"
+blake2b_simd = "1.0.0"
+ff = "0.13"
+rand = "0.8.4"
+flatbuffers = { git = "https://github.com/google/flatbuffers", tag = "v24.3.7" }
+serde = {version = "1.0.126", features = ["derive"]}
+
+[dependencies.zcash_primitives]
+git = "https://github.com/hhanh00/librustzcash.git"
+rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
+features = [ "transparent-inputs" ]
