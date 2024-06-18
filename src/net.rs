@@ -1,6 +1,5 @@
 use crate::{
-    lwd_rpc::{compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange},
-    Connection, Election,
+    db::create_tables, lwd_rpc::{compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange}, Connection, Election
 };
 use anyhow::Result;
 use rusqlite::params;
@@ -24,9 +23,13 @@ pub async fn download_reference_data(
     lwd_url: &str,
     election: &Election,
 ) -> Result<()> {
+    create_tables(connection)?;
+    let c = connection.query_row("SELECT COUNT(*) FROM cmxs", [], |r| r.get::<_, u32>(0))?;
+    if c != 0 {
+        return Ok(())
+    }
+
     let mut client = connect_lightwalletd(lwd_url).await?;
-    connection.execute("DELETE FROM nullifiers", [])?;
-    connection.execute("DELETE FROM cmxs", [])?;
     let mut block_stream = client
         .get_block_range(Request::new(BlockRange {
             start: Some(BlockId {
