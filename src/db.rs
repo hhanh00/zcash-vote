@@ -20,6 +20,7 @@ pub fn create_tables(connection: &Connection) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn get_connection(pool: &Pool<SqliteConnectionManager>) -> crate::Connection {
     let connection = pool.get().unwrap();
     connection

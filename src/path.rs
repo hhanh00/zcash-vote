@@ -2,7 +2,7 @@ use std::mem::swap;
 
 use anyhow::Result;
 
-use crate::{prevhash::PreviousHashes, Hash, DEPTH};
+use crate::{Hash, DEPTH};
 
 #[derive(Clone, Default)]
 pub struct MerklePath {
@@ -13,28 +13,26 @@ pub struct MerklePath {
 }
 
 pub fn calculate_merkle_paths(
-    ph: &PreviousHashes,
+    position_offset: usize,
     positions: &[u32],
     hashes: &[Hash],
 ) -> Result<Vec<MerklePath>> {
-    let mut start = ph.position();
     let mut paths = positions
         .iter()
-        .map(|p| MerklePath {
-            value: hashes[*p as usize - start],
-            position: *p,
-            path: [Hash::default(); DEPTH],
-            p: *p as usize,
+        .map(|p| {
+            let rel_p = *p as usize - position_offset;
+            MerklePath {
+                value: hashes[rel_p],
+                position: rel_p as u32,
+                path: [Hash::default(); DEPTH],
+                p: rel_p,
+            }
         })
         .collect::<Vec<_>>();
     let mut er = orchard::pob::empty_hash();
     let mut layer = Vec::with_capacity(positions.len() + 2);
     for i in 0..32 {
         if i == 0 {
-            if let Some(h) = ph.lefts[i] {
-                layer.push(h);
-                start -= 1;
-            }
             layer.extend(hashes);
             if layer.len() & 1 == 1 {
                 layer.push(er);
@@ -42,7 +40,7 @@ pub fn calculate_merkle_paths(
         }
 
         for path in paths.iter_mut() {
-            let idx = path.p - start;
+            let idx = path.p;
             if idx & 1 == 1 {
                 path.path[i] = layer[idx as usize - 1];
             } else {
@@ -50,15 +48,9 @@ pub fn calculate_merkle_paths(
             }
             path.p /= 2;
         }
-        start /= 2;
 
         let pairs = layer.len() / 2;
         let mut next_layer = Vec::with_capacity(pairs + 2);
-        if i < 31 {
-            if let Some(h) = ph.lefts[i + 1] {
-                next_layer.push(h);
-            }
-        }
 
         for j in 0..pairs {
             let h = orchard::pob::cmx_hash(i as u8, &layer[j * 2], &layer[j * 2 + 1]);
@@ -73,27 +65,20 @@ pub fn calculate_merkle_paths(
         swap(&mut layer, &mut next_layer);
     }
 
-    println!("root: {}", hex::encode(&layer[0]));
-
     Ok(paths)
 }
 
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use rand::rngs::OsRng;
 
-    use crate::{
-        db::get_connection, net::{connect_lightwalletd, download_reference_data}, Election, 
-    };
+    use crate::{db::get_connection, net::download_reference_data, Election};
 
     #[tokio::test]
     async fn test() -> Result<()> {
         const DB_FILE: &str = "/Users/hanhhuynhhuu/Library/Containers/me.hanh.ywallet/Data/Library/Application Support/me.hanh.ywallet/databases/zec.db";
         const LWD_URL: &str = "https://lwd5.zcash-infra.com:9067";
 
-        let mut rng = OsRng;
-        let account = 4;
         let e = Election {
             name: "Devfund Poll".to_string(),
             start_height: 2540000,
