@@ -15,6 +15,7 @@ mod proof;
 
 use anyhow::Result;
 pub use proof::{create_ballot, validate_proof};
+pub use db::drop_tables;
 pub use net::download_reference_data;
 use vote_generated::fb::{BallotEnvelope, BallotEnvelopeT};
 pub use vote_generated::fb as vote_data;
