@@ -20,6 +20,12 @@ pub fn create_tables(connection: &Connection) -> Result<()> {
     Ok(())
 }
 
+pub fn drop_tables(connection: &Connection) -> Result<()> {
+    connection.execute("DROP TABLE IF EXISTS nullifiers", [])?;
+    connection.execute("DROP TABLE IF EXISTS cmxs", [])?;
+    Ok(())
+}
+
 #[allow(dead_code)]
 pub fn get_connection(pool: &Pool<SqliteConnectionManager>) -> crate::Connection {
     let connection = pool.get().unwrap();
