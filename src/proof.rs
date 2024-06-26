@@ -122,13 +122,37 @@ pub async fn create_ballot<R: RngCore + CryptoRng>(
         nfs.push(Fp::one().neg());
     }
 
+    // The nf leaves are
+    // 0 nf1-1  nf1+1 nf2-1 ... nfn+1 -1
+    // where nf1, nf2, are used nullifiers
+    // a unused nf will fall into a "even" position
+    // like [0, nf1-1], [nf1+1, nf2-1]
+    // but should not be in (nf1-1, nf1+1) = {nf1}
+    // It's statistically unprobable that nf == nf1-1, or that nf2 == nf1+1
+    // but that's Ok. We just need to return the *start* of the range
+    // In summary, finding nf in nfs is ok, but we need to coerce nf_start to
+    // the beginning of the range
+    // Otherwise, when nf is not in nfs, the binary search returns the index
+    // where nf can be inserted without changing the order.
+    // The index must be odd and nf_start == index - 1
+
     for n in notes.iter_mut() {
         let NotePosition { note, .. } = n;
         let nf: Nullifier = note.nullifier(&fvk);
         let nf = Fp::from_repr(nf.to_bytes()).unwrap();
         match nfs.binary_search(&nf) {
-            Ok(_) => anyhow::bail!("Duplicate nullifier"),
+            // nf fell on one of the ends of a range
+            Ok(idx) => {
+                // bring to start of range
+                let idx = (idx as u32) & 0xFFFF_FFFEu32;
+                n.nf_start_range = nfs[idx as usize];
+                n.nf_position = idx;
+            },
             Err(idx) => {
+                if idx & 1 == 0 {
+                    // nf fell between two ranges
+                    anyhow::bail!("Nullifier used");
+                }
                 n.nf_start_range = nfs[idx - 1];
                 n.nf_position = (idx - 1) as u32;
             }
