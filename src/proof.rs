@@ -3,7 +3,7 @@ use blake2b_simd::Params;
 use ff::{Field, PrimeField};
 use orchard::{
     keys::{Diversifier, FullViewingKey, Scope, SpendAuthorizingKey, SpendingKey},
-    note::{Nullifier, RandomSeed},
+    note::{ExtractedNoteCommitment, Nullifier, RandomSeed},
     pob::{create_proof, verify_proof, Proof, ProofBalancePublic},
     primitives::redpallas::{Binding, Signature, SigningKey, SpendAuth, VerificationKey},
     tree::{MerkleHashOrchard, MerklePath as OrchardMerklePath},
@@ -96,6 +96,13 @@ pub async fn create_ballot<R: RngCore + CryptoRng>(
 
     let positions = notes.iter().map(|n| n.position).collect::<Vec<_>>();
     let cmx_paths = calculate_merkle_paths(ph.position(), &positions, &hashes)?;
+    for cmx_path in cmx_paths.iter() {
+        let auth_path = cmx_path.path.map(|h| MerkleHashOrchard::from_bytes(&h).unwrap());
+        let omp = OrchardMerklePath::from_parts(cmx_path.position, 
+            auth_path);
+        let anchor = omp.root(ExtractedNoteCommitment::from_bytes(&cmx_path.value).unwrap());
+        println!("{:?}", anchor);
+    }
 
     log::info!("Building nf tree...");
     s = connection.prepare("SELECT hash FROM nullifiers ORDER BY revhash")?;
@@ -108,7 +115,7 @@ pub async fn create_ballot<R: RngCore + CryptoRng>(
     for r in rows {
         let r = r?;
         // Skip empty ranges when nullifiers are consecutive
-        // (with very low odds)
+        // (with statistically negligible odds)
         if prev < r {
             // Ranges are inclusive of both ends
             nfs.push(prev);
@@ -175,13 +182,14 @@ pub async fn create_ballot<R: RngCore + CryptoRng>(
     for (n, (cmx_path, nf_path)) in notes.iter().zip(cmx_paths.iter().zip(nf_paths.iter())) {
         let NotePosition {
             note,
-            position,
             nf_start_range,
             nf_position,
+            ..
         } = n;
 
+        let cmx = ExtractedNoteCommitment::from_bytes(&cmx_path.value).unwrap();
         let cmx_path = OrchardMerklePath::from_parts(
-            *position,
+            cmx_path.position,
             cmx_path
                 .path
                 .map(|h| MerkleHashOrchard::from_bytes(&h).unwrap()),
@@ -193,8 +201,8 @@ pub async fn create_ballot<R: RngCore + CryptoRng>(
                 .map(|h| MerkleHashOrchard::from_bytes(&h).unwrap()),
         );
 
-        // let cmx = ExtractedNoteCommitment::from_bytes(&p.value).unwrap();
-        // let root = path.root(cmx);
+        let root = cmx_path.root(cmx);
+        println!("cmx {:?}", root);
 
         let alpha = Fq::random(&mut rng);
 
