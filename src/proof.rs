@@ -59,7 +59,7 @@ pub async fn create_ballot<R: RngCore + CryptoRng>(
 
     println!("Scanning notes...");
     let mut notes = vec![];
-    let mut s = connection.prepare("SELECT id_note, position, diversifier, value, rcm, nf, rho FROM received_notes WHERE account = ?1 AND height >= ?2 AND height <= ?3 AND orchard = 1 AND spent IS NULL")?;
+    let mut s = connection.prepare("SELECT id_note, position, diversifier, value, rcm, nf, rho FROM received_notes WHERE account = ?1 AND height >= ?2 AND height <= ?3 AND orchard = 1 AND (spent IS NULL OR spent > ?3)")?;
     let rows = s.query_map(params![account, e.start_height, e.end_height], |r| {
         let id_note = r.get::<_, u32>(0)?;
         let position = r.get::<_, u32>(1)?;
