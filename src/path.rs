@@ -21,6 +21,9 @@ pub fn calculate_merkle_paths(
         .iter()
         .map(|p| {
             let rel_p = *p as usize - position_offset;
+            if (*p as usize) < position_offset {
+
+            }
             MerklePath {
                 value: hashes[rel_p],
                 position: rel_p as u32,
@@ -80,6 +83,7 @@ mod tests {
         const LWD_URL: &str = "https://lwd5.zcash-infra.com:9067";
 
         let e = Election {
+            id: 0,
             name: "Devfund Poll".to_string(),
             start_height: 2540000,
             end_height: 2541500,

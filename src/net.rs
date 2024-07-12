@@ -1,12 +1,12 @@
 use crate::{
-    db::create_tables, lwd_rpc::{compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange}, Connection, Election
+    db::create_tables, errors::VoteError, lwd_rpc::{compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange}, Connection, Election
 };
 use anyhow::Result;
 use rusqlite::params;
 use tonic::{transport::{Certificate, Channel, ClientTlsConfig}, Request};
 
 /// Connect to a lightwalletd server
-pub async fn connect_lightwalletd(url: &str) -> anyhow::Result<CompactTxStreamerClient<Channel>> {
+pub async fn connect_lightwalletd(url: &str) -> Result<CompactTxStreamerClient<Channel>, VoteError> {
     let mut channel = tonic::transport::Channel::from_shared(url.to_owned())?;
     if url.starts_with("https") {
         let pem = include_bytes!("ca.pem");

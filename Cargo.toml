@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+thiserror = "1.0.62"
 anyhow = "1.0.40"
 log = "0.4.14"
 futures = "0.3.30"
@@ -22,6 +23,9 @@ ff = "0.13"
 rand = "0.8.4"
 flatbuffers = { git = "https://github.com/google/flatbuffers", tag = "v24.3.7" }
 serde = {version = "1.0.126", features = ["derive"]}
+error-chain = "0.12.4"
+http = "0.2.12"
+halo2_proofs = "0.2.0"
 
 [dependencies.zcash_primitives]
 git = "https://github.com/hhanh00/librustzcash.git"
