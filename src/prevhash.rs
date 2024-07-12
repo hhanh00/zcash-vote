@@ -1,9 +1,9 @@
-use anyhow::Result;
 use orchard::tree::MerkleHashOrchard;
 use tonic::{transport::Channel, Request};
 use zcash_primitives::merkle_tree::CommitmentTree;
 
 use crate::{
+    errors::VoteError,
     lwd_rpc::{compact_tx_streamer_client::CompactTxStreamerClient, BlockId},
     Hash, DEPTH,
 };
@@ -28,7 +28,7 @@ impl PreviousHashes {
 pub async fn fetch_tree_state(
     client: &mut CompactTxStreamerClient<Channel>,
     height: u32,
-) -> Result<PreviousHashes> {
+) -> Result<PreviousHashes, VoteError> {
     let tree_state = client
         .get_tree_state(Request::new(BlockId {
             height: height as u64,
@@ -50,7 +50,7 @@ pub async fn fetch_tree_state(
     if let Some(mut r) = tree.right.map(|v| v.to_bytes()) {
         for (i, left) in ph.iter_mut().enumerate() {
             if let Some(l) = left {
-                r = orchard::pob::cmx_hash(i as u8, &l, &r);
+                r = orchard::vote::cmx_hash(i as u8, &l, &r);
                 *left = None;
             } else {
                 *left = Some(r);

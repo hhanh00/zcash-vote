@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.40"
+thiserror = "1.0.62"
+#anyhow = "1.0.40"
 log = "0.4.14"
 futures = "0.3.30"
 futures-core = "0.3.30"
@@ -20,8 +21,13 @@ pasta_curves = "0.5"
 blake2b_simd = "1.0.0"
 ff = "0.13"
 rand = "0.8.4"
-flatbuffers = { git = "https://github.com/google/flatbuffers", tag = "v24.3.7" }
+#flatbuffers = { git = "https://github.com/google/flatbuffers", tag = "v24.3.7" }
 serde = {version = "1.0.126", features = ["derive"]}
+http = "0.2.12"
+halo2_proofs = "0.2.0"
+dotenv = "0.15.0"
+serde_json = "1.0"
+lazy_static = "1.5.0"
 
 [dependencies.zcash_primitives]
 git = "https://github.com/hhanh00/librustzcash.git"

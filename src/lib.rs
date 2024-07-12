@@ -1,3 +1,4 @@
+use orchard::{note::Nullifier, tree::MerklePath, Address, Note};
 use serde::{Deserialize, Serialize};
 
 pub type Hash = [u8; 32];
@@ -6,32 +7,26 @@ pub const DEPTH: usize = 32;
 #[path = "./cash.z.wallet.sdk.rpc.rs"]
 pub mod lwd_rpc;
 
-mod vote_generated;
-mod net;
 mod db;
-mod path;
+mod election;
+pub mod errors;
+mod net;
 mod prevhash;
-mod proof;
+mod refs;
 
-use anyhow::Result;
-pub use proof::{create_ballot, validate_proof};
-pub use db::drop_tables;
+pub use db::{drop_tables, get_connection};
+pub use election::{CandidateChoice, Election};
 pub use net::download_reference_data;
-use vote_generated::fb::{BallotEnvelope, BallotEnvelopeT};
-pub use vote_generated::fb as vote_data;
+pub use refs::{get_candidate_address, get_cmx_count, list_cmxs, list_nfs, list_notes};
 
 pub type Connection = r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>;
 
-#[derive(Serialize, Deserialize)]
-pub struct Election {
-    pub name: String,
-    pub start_height: u32,
-    pub end_height: u32,
-    pub cmx: Option<String>,
-    pub nf: Option<String>
-}
-
-pub fn parse_ballot(bytes: &[u8]) -> Result<BallotEnvelopeT> {
-    let envelope = flatbuffers::root::<BallotEnvelope>(bytes)?;
-    Ok(envelope.unpack())
+#[derive(Clone, Debug)]
+pub struct VoteNote {
+    pub note: Note,
+    pub idx: usize,
+    pub nf: Nullifier,
+    pub nf_start: Nullifier,
+    pub nf_path: MerklePath,
+    pub cmx_path: MerklePath,
 }

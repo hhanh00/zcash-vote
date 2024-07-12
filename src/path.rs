@@ -1,8 +1,6 @@
 use std::mem::swap;
 
-use anyhow::Result;
-
-use crate::{Hash, DEPTH};
+use crate::{errors::VoteError, Hash, DEPTH};
 
 #[derive(Clone, Default)]
 pub struct MerklePath {
@@ -16,11 +14,14 @@ pub fn calculate_merkle_paths(
     position_offset: usize,
     positions: &[u32],
     hashes: &[Hash],
-) -> Result<Vec<MerklePath>> {
+) -> Result<Vec<MerklePath>, VoteError> {
     let mut paths = positions
         .iter()
         .map(|p| {
             let rel_p = *p as usize - position_offset;
+            if (*p as usize) < position_offset {
+
+            }
             MerklePath {
                 value: hashes[rel_p],
                 position: rel_p as u32,
@@ -80,6 +81,7 @@ mod tests {
         const LWD_URL: &str = "https://lwd5.zcash-infra.com:9067";
 
         let e = Election {
+            id: 0,
             name: "Devfund Poll".to_string(),
             start_height: 2540000,
             end_height: 2541500,
@@ -90,7 +92,7 @@ mod tests {
         let pool = r2d2::Pool::new(manager)?;
         let connection = get_connection(&pool);
 
-        download_reference_data(&connection, LWD_URL, &e).await?;
+        download_reference_data(&connection, LWD_URL, e.start_height, e.end_height).await?;
         Ok(())
     }
 }

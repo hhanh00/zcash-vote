@@ -15,15 +15,9 @@ use rand::{CryptoRng, RngCore};
 use rusqlite::params;
 
 use crate::{
-    Hash,
-    net::connect_lightwalletd,
-    parse_ballot,
-    path::calculate_merkle_paths,
-    prevhash::fetch_tree_state,
-    vote_generated::fb::{
+    net::connect_lightwalletd, parse_ballot, path::calculate_merkle_paths, prevhash::fetch_tree_state, vote_generated::fb::{
         BallotEnvelopeT, BallotT, BallotWitnessT, HeaderT, InputT, ProofT, SignatureT,
-    },
-    Connection, Election,
+    }, Connection, Election, Hash, errors::VoteError
 };
 
 pub struct NotePosition {
@@ -41,7 +35,7 @@ pub async fn create_ballot<R: RngCore + CryptoRng>(
     id_notes: &[u32],
     candidate: u32,
     mut rng: R,
-) -> Result<BallotEnvelopeT> {
+) -> Result<BallotEnvelopeT, VoteError> {
     let mut client = connect_lightwalletd(lwd_url).await?;
     let ph = fetch_tree_state(&mut client, e.start_height - 1).await?;
 
@@ -158,7 +152,7 @@ pub async fn create_ballot<R: RngCore + CryptoRng>(
             Err(idx) => {
                 if idx & 1 == 0 {
                     // nf fell between two ranges
-                    anyhow::bail!("Nullifier used");
+                    return Err(VoteError::DoubleNullifier(hex::encode(&nf.to_repr())));
                 }
                 n.nf_start_range = nfs[idx - 1];
                 n.nf_position = (idx - 1) as u32;

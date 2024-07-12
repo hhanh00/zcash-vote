@@ -1,12 +1,19 @@
 use crate::{
-    db::create_tables, lwd_rpc::{compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange}, Connection, Election
+    db::create_tables,
+    errors::VoteError,
+    lwd_rpc::{compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange},
+    Connection,
 };
-use anyhow::Result;
 use rusqlite::params;
-use tonic::{transport::{Certificate, Channel, ClientTlsConfig}, Request};
+use tonic::{
+    transport::{Certificate, Channel, ClientTlsConfig},
+    Request,
+};
 
 /// Connect to a lightwalletd server
-pub async fn connect_lightwalletd(url: &str) -> anyhow::Result<CompactTxStreamerClient<Channel>> {
+pub async fn connect_lightwalletd(
+    url: &str,
+) -> Result<CompactTxStreamerClient<Channel>, VoteError> {
     let mut channel = tonic::transport::Channel::from_shared(url.to_owned())?;
     if url.starts_with("https") {
         let pem = include_bytes!("ca.pem");
@@ -21,23 +28,24 @@ pub async fn connect_lightwalletd(url: &str) -> anyhow::Result<CompactTxStreamer
 pub async fn download_reference_data(
     connection: &Connection,
     lwd_url: &str,
-    election: &Election,
-) -> Result<()> {
+    start_height: u32,
+    end_height: u32,
+) -> Result<(), VoteError> {
     create_tables(connection)?;
     let c = connection.query_row("SELECT COUNT(*) FROM cmxs", [], |r| r.get::<_, u32>(0))?;
     if c != 0 {
-        return Ok(())
+        return Ok(());
     }
 
     let mut client = connect_lightwalletd(lwd_url).await?;
     let mut block_stream = client
         .get_block_range(Request::new(BlockRange {
             start: Some(BlockId {
-                height: election.start_height as u64,
+                height: start_height as u64,
                 hash: vec![],
             }),
             end: Some(BlockId {
-                height: election.end_height as u64,
+                height: end_height as u64,
                 hash: vec![],
             }),
             spam_filter_threshold: 0,
@@ -69,7 +77,7 @@ pub async fn download_reference_data(
         }
     }
     if pos & 1 == 1 {
-        let er = orchard::pob::empty_hash();
+        let er = orchard::vote::empty_hash();
         s_cmx.execute(params![&er])?;
     }
     Ok(())
