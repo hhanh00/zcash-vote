@@ -12,7 +12,7 @@ mod net;
 mod db;
 mod path;
 mod prevhash;
-mod proof;
+pub mod proof;
 
 use anyhow::Result;
 pub use proof::{create_ballot, validate_proof};
