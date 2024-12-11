@@ -15,9 +15,9 @@ use rand::{CryptoRng, RngCore};
 use rusqlite::params;
 
 use crate::{
-    net::connect_lightwalletd, parse_ballot, path::calculate_merkle_paths, prevhash::fetch_tree_state, vote_generated::fb::{
+    errors::VoteError, net::connect_lightwalletd, parse_ballot, path::{build_nfs_tree, calculate_merkle_paths}, prevhash::fetch_tree_state, vote_generated::fb::{
         BallotEnvelopeT, BallotT, BallotWitnessT, HeaderT, InputT, ProofT, SignatureT,
-    }, Connection, Election, Hash, errors::VoteError
+    }, Connection, Election, Hash
 };
 
 pub struct NotePosition {
@@ -89,7 +89,7 @@ pub async fn create_ballot<R: RngCore + CryptoRng>(
     let hashes = rows.collect::<Result<Vec<_>, _>>()?;
 
     let positions = notes.iter().map(|n| n.position).collect::<Vec<_>>();
-    let cmx_paths = calculate_merkle_paths(ph.position(), &positions, &hashes)?;
+    let (_, cmx_paths) = calculate_merkle_paths(ph.position(), &positions, &hashes)?;
     for cmx_path in cmx_paths.iter() {
         let auth_path = cmx_path.path.map(|h| MerkleHashOrchard::from_bytes(&h).unwrap());
         let omp = OrchardMerklePath::from_parts(cmx_path.position, 
@@ -104,24 +104,8 @@ pub async fn create_ballot<R: RngCore + CryptoRng>(
         let h = r.get::<_, [u8; 32]>(0)?;
         Ok(Fp::from_repr(h).unwrap())
     })?;
-    let mut nfs = vec![];
-    let mut prev = Fp::zero();
-    for r in rows {
-        let r = r?;
-        // Skip empty ranges when nullifiers are consecutive
-        // (with statistically negligible odds)
-        if prev < r {
-            // Ranges are inclusive of both ends
-            nfs.push(prev);
-            nfs.push(r - Fp::one());
-
-        }
-        prev = r + Fp::one();
-    }
-    if prev != Fp::zero() { // overflow when a nullifier == max
-        nfs.push(prev);
-        nfs.push(Fp::one().neg());
-    }
+    let rows = rows.collect::<Result<Vec<_>, _>>()?;
+    let nfs = build_nfs_tree(&rows)?;
 
     // The nf leaves are
     // 0 nf1-1  nf1+1 nf2-1 ... nfn+1 -1
@@ -162,7 +146,7 @@ pub async fn create_ballot<R: RngCore + CryptoRng>(
 
     let positions = notes.iter().map(|n| n.nf_position).collect::<Vec<_>>();
     let nfs = nfs.iter().map(|nf| nf.to_repr()).collect::<Vec<_>>();
-    let nf_paths = calculate_merkle_paths(0, &positions, &nfs)?;
+    let (_, nf_paths) = calculate_merkle_paths(0, &positions, &nfs)?;
 
     let domain = orchard::pob::domain(e.name.as_bytes());
     // let sk = Fp::one().to_repr();

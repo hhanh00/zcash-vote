@@ -1,8 +1,7 @@
 use crate::{
-    db::create_tables, errors::VoteError, lwd_rpc::{compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange}, Connection, Election
+    errors::VoteError, lwd_rpc::{compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange}, Election
 };
 use anyhow::Result;
-use rusqlite::params;
 use tonic::{transport::{Certificate, Channel, ClientTlsConfig}, Request};
 
 /// Connect to a lightwalletd server
@@ -19,15 +18,13 @@ pub async fn connect_lightwalletd(url: &str) -> Result<CompactTxStreamerClient<C
 }
 
 pub async fn download_reference_data(
-    connection: &Connection,
     lwd_url: &str,
     election: &Election,
-) -> Result<()> {
-    create_tables(connection)?;
-    let c = connection.query_row("SELECT COUNT(*) FROM cmxs", [], |r| r.get::<_, u32>(0))?;
-    if c != 0 {
-        return Ok(())
-    }
+) -> Result<(Vec<Vec<u8>>, Vec<Vec<u8>>)> {
+    // let c = connection.query_row("SELECT COUNT(*) FROM cmxs", [], |r| r.get::<_, u32>(0))?;
+    // if c != 0 {
+    //     return Ok(())
+    // }
 
     let mut client = connect_lightwalletd(lwd_url).await?;
     let mut block_stream = client
@@ -45,32 +42,25 @@ pub async fn download_reference_data(
         .await?
         .into_inner();
 
-    let mut s_nf = connection.prepare(
-        "INSERT INTO nullifiers(hash, revhash)
-        VALUES (?1, ?2)",
-    )?;
-    let mut s_cmx = connection.prepare(
-        "INSERT INTO cmxs(hash)
-        VALUES (?1)",
-    )?;
     let mut pos = 0;
+    let mut nfs = vec![];
+    let mut cmxs = vec![];
     while let Some(block) = block_stream.message().await? {
         for tx in block.vtx.iter() {
             for a in tx.actions.iter() {
-                let nf = &*a.nullifier;
-                let mut rev_nf = [0u8; 32];
-                rev_nf.copy_from_slice(nf);
-                rev_nf.reverse();
-                s_nf.execute(params![nf, &rev_nf])?;
-                let cmx = &*a.cmx;
-                s_cmx.execute(params![cmx])?;
+                nfs.push(a.nullifier.to_vec());
+                cmxs.push(a.cmx.clone());
                 pos += 1;
             }
         }
     }
+
+    // cmxs are padded to an even # of nodes
+    // nfs is not padded because the nullifier tree
+    // has 2x len(nfs) which is always even
     if pos & 1 == 1 {
         let er = orchard::pob::empty_hash();
-        s_cmx.execute(params![&er])?;
+        cmxs.push(er.to_vec());
     }
-    Ok(())
+    Ok((nfs, cmxs))
 }

@@ -9,8 +9,8 @@ pub mod lwd_rpc;
 pub mod errors;
 mod vote_generated;
 mod net;
-mod db;
-mod path;
+pub mod db;
+pub mod path;
 mod prevhash;
 pub mod proof;
 

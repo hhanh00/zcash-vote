@@ -1,7 +1,7 @@
 use anyhow::Result;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
 
 pub fn create_tables(connection: &Connection) -> Result<()> {
     connection.execute(
@@ -30,4 +30,25 @@ pub fn drop_tables(connection: &Connection) -> Result<()> {
 pub fn get_connection(pool: &Pool<SqliteConnectionManager>) -> crate::Connection {
     let connection = pool.get().unwrap();
     connection
+}
+
+pub fn store_refdata(connection: &Connection, nfs: &[Vec<u8>], cmxs: &[Vec<u8>]) -> Result<()> {
+    let mut s_nf = connection.prepare(
+        "INSERT INTO nullifiers(hash, revhash)
+        VALUES (?1, ?2)",
+    )?;
+    let mut s_cmx = connection.prepare(
+        "INSERT INTO cmxs(hash)
+        VALUES (?1)",
+    )?;
+    for nf in nfs {
+        let mut rev_nf = [0u8; 32];
+        rev_nf.copy_from_slice(nf);
+        rev_nf.reverse();
+        s_nf.execute(params![nf, &rev_nf])?;
+    }
+    for cmx in cmxs {
+        s_cmx.execute(params![cmx])?;
+    }
+    Ok(())
 }

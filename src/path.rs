@@ -1,6 +1,7 @@
 use std::mem::swap;
 
 use anyhow::Result;
+use pasta_curves::Fp;
 
 use crate::{Hash, DEPTH};
 
@@ -12,18 +13,38 @@ pub struct MerklePath {
     p: usize,
 }
 
+pub fn build_nfs_tree(rows: &[Fp]) -> Result<Vec<Fp>> {
+    let mut nfs = vec![];
+    let mut prev = Fp::zero();
+    for r in rows {
+        // Skip empty ranges when nullifiers are consecutive
+        // (with statistically negligible odds)
+        if prev < *r {
+            // Ranges are inclusive of both ends
+            nfs.push(prev);
+            nfs.push(r - Fp::one());
+        }
+        prev = r + Fp::one();
+    }
+    if prev != Fp::zero() {
+        // overflow when a nullifier == max
+        nfs.push(prev);
+        nfs.push(Fp::one().neg());
+    }
+
+    Ok(nfs)
+}
+
 pub fn calculate_merkle_paths(
     position_offset: usize,
     positions: &[u32],
     hashes: &[Hash],
-) -> Result<Vec<MerklePath>> {
+) -> Result<(Vec<u8>, Vec<MerklePath>)> {
     let mut paths = positions
         .iter()
         .map(|p| {
             let rel_p = *p as usize - position_offset;
-            if (*p as usize) < position_offset {
-
-            }
+            if (*p as usize) < position_offset {}
             MerklePath {
                 value: hashes[rel_p],
                 position: rel_p as u32,
@@ -68,7 +89,7 @@ pub fn calculate_merkle_paths(
         swap(&mut layer, &mut next_layer);
     }
 
-    Ok(paths)
+    Ok((layer[0].to_vec(), paths))
 }
 
 #[cfg(test)]
@@ -94,7 +115,7 @@ mod tests {
         let pool = r2d2::Pool::new(manager)?;
         let connection = get_connection(&pool);
 
-        download_reference_data(&connection, LWD_URL, &e).await?;
+        download_reference_data(LWD_URL, &e).await?;
         Ok(())
     }
 }
