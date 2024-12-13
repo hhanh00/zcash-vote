@@ -30,8 +30,13 @@ pub struct Election {
     pub name: String,
     pub start_height: u32,
     pub end_height: u32,
+    pub close_height: u32,
+    pub submit_url: String,
+    pub question: String,
+    pub candidates: Vec<String>,
     pub cmx: Option<String>,
-    pub nf: Option<String>
+    pub nf: Option<String>,
+    pub status: String,
 }
 
 pub fn parse_ballot(bytes: &[u8]) -> Result<BallotEnvelopeT> {
