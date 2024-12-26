@@ -24,7 +24,7 @@ pub use vote_generated::fb as vote_data;
 pub type Connection = r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>;
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Default, Debug)]
 pub struct Election {
     pub id: u32,
     pub name: String,
