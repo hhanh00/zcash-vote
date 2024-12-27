@@ -26,7 +26,7 @@ impl CandidateChoice {
 }
 
 ///
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Default, Debug)]
 pub struct Election {
     pub id: u32,
     pub name: String,
