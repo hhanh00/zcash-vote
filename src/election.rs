@@ -34,6 +34,7 @@ pub struct Election {
     pub end_height: u32,
     pub question: String,
     pub candidates: Vec<CandidateChoice>,
+    pub signature_required: bool,
     #[serde(with = "hex")]
     pub cmx: [u8; 32],
     #[serde(with = "hex")]
