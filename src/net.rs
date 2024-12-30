@@ -1,7 +1,6 @@
 use crate::{
-    db::create_tables,
     errors::VoteError,
-    lwd_rpc::{compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange},
+    rpc::{compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange},
     Connection,
 };
 use rusqlite::params;
@@ -31,7 +30,6 @@ pub async fn download_reference_data(
     start_height: u32,
     end_height: u32,
 ) -> Result<(), VoteError> {
-    create_tables(connection)?;
     let c = connection.query_row("SELECT COUNT(*) FROM cmxs", [], |r| r.get::<_, u32>(0))?;
     if c != 0 {
         return Ok(());

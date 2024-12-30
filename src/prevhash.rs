@@ -4,7 +4,7 @@ use zcash_primitives::merkle_tree::CommitmentTree;
 
 use crate::{
     errors::VoteError,
-    lwd_rpc::{compact_tx_streamer_client::CompactTxStreamerClient, BlockId},
+    rpc::{compact_tx_streamer_client::CompactTxStreamerClient, BlockId},
     Hash, DEPTH,
 };
 
