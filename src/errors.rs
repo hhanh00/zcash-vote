@@ -27,4 +27,7 @@ pub enum VoteError {
     InvalidJson(String),
     #[error("Invalid Ballot: {0}")]
     InvalidBallot(String),
+
+    #[error(transparent)]
+    Anyhow(#[from] anyhow::Error),
 }
