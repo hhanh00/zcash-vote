@@ -9,6 +9,7 @@ pub mod lwd_rpc;
 
 mod db;
 mod election;
+pub mod ballot;
 pub mod errors;
 mod net;
 mod prevhash;
