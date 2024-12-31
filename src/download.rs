@@ -7,7 +7,7 @@ use crate::errors::VoteError;
 
 pub async fn download_reference_data(
     connection: PoolConnection,
-    election: Election,
+    election: &Election,
     fvk: Option<FullViewingKey>,
     lwd_url: &str,
     progress: impl Fn(u32) + Send + 'static,
