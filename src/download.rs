@@ -8,12 +8,14 @@ use crate::errors::VoteError;
 pub async fn download_reference_data(
     connection: PoolConnection,
     election: Election,
-    fvk: FullViewingKey,
+    fvk: Option<FullViewingKey>,
     lwd_url: &str,
     progress: impl Fn(u32) + Send + 'static,
 ) -> Result<(PoolConnection, u32)> {
-    let ivk = fvk.to_ivk(Scope::External);
-    let pivk = PreparedIncomingViewingKey::new(&ivk);
+    let pivk = fvk.clone().map(|fvk| {
+        let ivk = fvk.to_ivk(Scope::External);
+        PreparedIncomingViewingKey::new(&ivk)
+    });
     let domain = election.domain();
     let start = election.start_height as u64;
     let end = election.end_height as u64;
@@ -42,7 +44,7 @@ pub async fn download_reference_data(
             if height % 1000 == 0 || height == end as u32 {
                 progress(block.height as u32);
             }
-            let inc_position = handle_block(&connection, &domain, &fvk, &pivk, position, block)?;
+            let inc_position = handle_block(&connection, &domain, fvk.as_ref(), pivk.as_ref(), position, block)?;
             position += inc_position;
         }
 
@@ -70,8 +72,8 @@ pub async fn download_reference_data(
 fn handle_block(
     connection: &Connection,
     domain: &ElectionDomain,
-    fvk: &FullViewingKey,
-    pivk: &PreparedIncomingViewingKey,
+    fvk: Option<&FullViewingKey>,
+    pivk: Option<&PreparedIncomingViewingKey>,
     start_position: usize,
     block: CompactBlock,
 ) -> Result<usize> {
@@ -80,26 +82,28 @@ fn handle_block(
     let mut position = 0usize;
     for tx in block.vtx {
         for a in tx.actions {
+            if let Some(pivk) = pivk {
             if let Some(note) = try_decrypt(pivk, &a)? {
-                let p = start_position + position;
-                let height = block.height;
-                let txid = &tx.hash;
-                let value = note.value().inner();
-                let div = note.recipient().diversifier();
-                let rseed = note.rseed().as_bytes();
-                let nf = note.nullifier(fvk).to_bytes();
-                let domain_nf = note
-                    .nullifier_domain(fvk, domain.0)
-                    .to_bytes();
-                let rho = note.rho().to_bytes();
-                connection.execute(
-                    "INSERT INTO notes
-                    (position, height, txid, value, div, rseed, nf, dnf, rho, spent)
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, NULL)",
-                    params![p, height, txid, value, div.as_array(), rseed, nf, domain_nf, rho],
-                )?;
+                    let p = start_position + position;
+                    let height = block.height;
+                    let txid = &tx.hash;
+                    let value = note.value().inner();
+                    let div = note.recipient().diversifier();
+                    let rseed = note.rseed().as_bytes();
+                    let nf = note.nullifier(fvk.unwrap()).to_bytes();
+                    let domain_nf = note
+                        .nullifier_domain(fvk.unwrap(), domain.0)
+                        .to_bytes();
+                    let rho = note.rho().to_bytes();
+                    connection.execute(
+                        "INSERT INTO notes
+                        (position, height, txid, value, div, rseed, nf, dnf, rho, spent)
+                        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, NULL)",
+                        params![p, height, txid, value, div.as_array(), rseed, nf, domain_nf, rho],
+                    )?;
 
-                println!("{:?}", note);
+                    println!("{:?}", note);
+                }
             }
             let nf = &a.nullifier;
             let cmx = &a.cmx;
