@@ -15,11 +15,13 @@ pub type Result<T> = std::result::Result<T, VoteError>;
 pub type PoolConnection = PooledConnection<SqliteConnectionManager>;
 
 pub mod db;
+pub mod address;
 mod election; // TODO: Check
 pub mod download;
 pub mod decrypt;
 pub mod trees;
 pub mod validate;
+pub mod vote;
 
 pub mod ballot;
 mod net;
