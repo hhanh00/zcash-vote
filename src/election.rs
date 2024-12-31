@@ -24,7 +24,7 @@ impl CandidateChoice {
 ///
 #[derive(Clone, Serialize, Deserialize, Default, Debug)]
 pub struct Election {
-    pub id: u32,
+    pub id: String,
     pub name: String,
     pub start_height: u32,
     pub end_height: u32,
