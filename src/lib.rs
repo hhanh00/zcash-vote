@@ -16,7 +16,7 @@ pub type PoolConnection = PooledConnection<SqliteConnectionManager>;
 
 pub mod db;
 pub mod address;
-mod election; // TODO: Check
+pub mod election; // TODO: Check
 pub mod download;
 pub mod decrypt;
 pub mod trees;
