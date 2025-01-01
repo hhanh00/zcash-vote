@@ -21,6 +21,16 @@ impl CandidateChoice {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize, Default, Debug)]
+pub struct OrchardHash(#[serde(with = "hex")] pub [u8; 32]);
+
+#[derive(Clone, Serialize, Deserialize, Default, Debug)]
+pub struct Frontier {
+    pub position: u32,
+    pub leaf: OrchardHash,
+    pub ommers: Vec<OrchardHash>,
+}
+
 ///
 #[derive(Clone, Serialize, Deserialize, Default, Debug)]
 pub struct Election {
@@ -31,10 +41,9 @@ pub struct Election {
     pub question: String,
     pub candidates: Vec<CandidateChoice>,
     pub signature_required: bool,
-    #[serde(with = "hex")]
-    pub cmx: [u8; 32],
-    #[serde(with = "hex")]
-    pub nf: [u8; 32],
+    pub cmx: OrchardHash,
+    pub nf: OrchardHash,
+    pub cmx_frontier: Option<Frontier>,
 }
 
 impl Election {

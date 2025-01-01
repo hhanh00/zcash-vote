@@ -41,3 +41,9 @@ rand_core = "0.6.4"
 git = "https://github.com/hhanh00/librustzcash.git"
 rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
 features = [ "transparent-inputs" ]
+
+[patch.crates-io]
+#orchard = {path = "../../ywallet/orchard"}
+orchard = {git = "https://github.com/hhanh00/orchard.git", rev="e7abba7"}
+halo2_gadgets  = { git = "https://github.com/zcash/halo2.git", rev = "642924d614305d882cc122739c59144109f4bd3f" }
+halo2_proofs = { git = "https://github.com/zcash/halo2.git", rev = "642924d614305d882cc122739c59144109f4bd3f" }

@@ -1,9 +1,9 @@
+use crate::{election::{Frontier, OrchardHash}, DEPTH};
 use anyhow::Result;
 use incrementalmerkletree::{Altitude, Hashable};
+use orchard::tree::{MerkleHashOrchard, MerklePath as OrchardMerklePath};
 use pasta_curves::{group::ff::PrimeField as _, Fp};
 use rusqlite::Connection;
-use orchard::tree::{MerkleHashOrchard, MerklePath as OrchardMerklePath};
-use crate::DEPTH;
 
 pub fn list_nf_ranges(connection: &Connection) -> Result<Vec<Fp>> {
     let mut s = connection.prepare("SELECT hash FROM nullifiers")?;
@@ -18,11 +18,11 @@ pub fn list_nf_ranges(connection: &Connection) -> Result<Vec<Fp>> {
     Ok(nf_tree)
 }
 
-pub fn compute_nf_root(connection: &Connection) -> Result<Vec<u8>> {
+pub fn compute_nf_root(connection: &Connection) -> Result<OrchardHash> {
     let nf_tree = list_nf_ranges(connection)?;
     let (nf_root, _) = calculate_merkle_paths(0, &[], &nf_tree);
 
-    Ok(nf_root.to_repr().to_vec())
+    Ok(OrchardHash(nf_root.to_repr()))
 }
 
 pub fn list_cmxs(connection: &Connection) -> Result<Vec<Fp>> {
@@ -36,11 +36,28 @@ pub fn list_cmxs(connection: &Connection) -> Result<Vec<Fp>> {
     Ok(cmx_tree)
 }
 
-pub fn compute_cmx_root(connection: &Connection) -> Result<Vec<u8>> {
+pub fn compute_cmx_root(connection: &Connection) -> Result<(OrchardHash, Option<Frontier>)> {
     let cmx_tree = list_cmxs(connection)?;
-    let (cmx_root, _) = calculate_merkle_paths(0, &[], &cmx_tree);
-
-    Ok(cmx_root.to_repr().to_vec())
+    let (cmx_root, frontier) = if cmx_tree.is_empty() {
+        let (cmx_root, _) = calculate_merkle_paths(0, &[], &[]);
+        (cmx_root, None)
+    }
+    else {
+        let end_position = cmx_tree.len() - 1;
+        let leaf = cmx_tree[end_position];
+        let (cmx_root, mps) = calculate_merkle_paths(0, &[end_position as u32], &cmx_tree);
+        let mp = &mps[0];
+        let ommers = mp.path.iter().map(|o|
+            OrchardHash(o.to_repr())).collect::<Vec<_>>();
+    
+        let frontier = Frontier {
+            position: mp.position,
+            leaf: OrchardHash(leaf.to_repr()),
+            ommers,
+        };
+        (cmx_root, Some(frontier))
+    };
+    Ok((OrchardHash(cmx_root.to_repr()),frontier))
 }
 
 pub fn build_nf_ranges(nfs: impl IntoIterator<Item = Fp>) -> Vec<Fp> {
@@ -140,13 +157,13 @@ pub struct MerklePath {
 
 impl MerklePath {
     pub fn to_orchard_merkle_tree(&self) -> OrchardMerklePath {
-        let auth_path = self.path.map(|h| MerkleHashOrchard::from_bytes(&h.to_repr()).unwrap());
-        let omp = OrchardMerklePath::from_parts(self.position,
-            auth_path);
+        let auth_path = self
+            .path
+            .map(|h| MerkleHashOrchard::from_bytes(&h.to_repr()).unwrap());
+        let omp = OrchardMerklePath::from_parts(self.position, auth_path);
         omp
     }
 }
-
 
 pub fn cmx_hash(level: u8, left: Fp, right: Fp) -> Fp {
     let left = MerkleHashOrchard::from_base(left);
