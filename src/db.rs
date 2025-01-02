@@ -7,33 +7,38 @@ use crate::as_byte256;
 
 pub fn create_schema(connection: &Connection) -> Result<()> {
     connection.execute(
-        "CREATE TABLE IF NOT EXISTS properties(
-            id_property INTEGER PRIMARY KEY,
-            name TEXT NOT NULL UNIQUE,
-            value TEXT NOT NULL
-        )",
+    "CREATE TABLE IF NOT EXISTS properties(
+        id_property INTEGER PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        value TEXT NOT NULL)",
         [],
     )?;
     connection.execute(
-        "CREATE TABLE IF NOT EXISTS ballots(
-            id_ballot INTEGER PRIMARY KEY,
-            election INTEGER NOT NULL,
-            hash BLOB NOT NULL UNIQUE,
-            data BLOB NOT NULL
-        )",
-        [],
-    )?;
-    connection.execute(
-        "CREATE TABLE IF NOT EXISTS nullifiers(
+    "CREATE TABLE IF NOT EXISTS ballots(
+        id_ballot INTEGER PRIMARY KEY,
         election INTEGER NOT NULL,
+        hash BLOB NOT NULL UNIQUE,
+        data BLOB NOT NULL)",
+        [],
+    )?;
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS nfs(
         id_nf INTEGER PRIMARY KEY NOT NULL,
-        hash BLOB NOT NULL)",
+        election INTEGER NOT NULL,
+        hash BLOB NOT NULL UNIQUE)",
+        [],
+    )?;
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS dnfs(
+        id_dnf INTEGER PRIMARY KEY NOT NULL,
+        election INTEGER NOT NULL,
+        hash BLOB NOT NULL UNIQUE)",
         [],
     )?;
     connection.execute(
         "CREATE TABLE IF NOT EXISTS cmxs(
-        election INTEGER NOT NULL,
         id_cmx INTEGER PRIMARY KEY NOT NULL,
+        election INTEGER NOT NULL,
         hash BLOB NOT NULL)",
         [],
     )?;
@@ -76,6 +81,14 @@ pub fn load_prop(connection: &Connection, name: &str) -> Result<Option<String>> 
         )
         .optional()?;
     Ok(value)
+}
+
+pub fn store_dnf(connection: &Connection, id_election: u32, dnf: &[u8]) -> Result<()> {
+    connection.execute(
+        "INSERT INTO dnfs(election, hash)", 
+        params![id_election, dnf]
+    )?;
+    Ok(())
 }
 
 pub fn list_notes(connection: &Connection, id_election: u32, fvk: &FullViewingKey) -> Result<Vec<(orchard::Note, u32)>> {

@@ -99,7 +99,7 @@ pub async fn create_ballot<R: RngCore + CryptoRng>(
     }
 
     log::info!("Building nf tree...");
-    s = connection.prepare("SELECT hash FROM nullifiers ORDER BY revhash")?;
+    s = connection.prepare("SELECT hash FROM nfs ORDER BY revhash")?;
     let rows = s.query_map([], |r| {
         let h = r.get::<_, [u8; 32]>(0)?;
         Ok(Fp::from_repr(h).unwrap())
@@ -108,7 +108,7 @@ pub async fn create_ballot<R: RngCore + CryptoRng>(
     let mut prev = Fp::zero();
     for r in rows {
         let r = r?;
-        // Skip empty ranges when nullifiers are consecutive
+        // Skip empty ranges when nfs are consecutive
         // (with statistically negligible odds)
         if prev < r {
             // Ranges are inclusive of both ends
@@ -125,7 +125,7 @@ pub async fn create_ballot<R: RngCore + CryptoRng>(
 
     // The nf leaves are
     // 0 nf1-1  nf1+1 nf2-1 ... nfn+1 -1
-    // where nf1, nf2, are used nullifiers
+    // where nf1, nf2, are used nfs
     // a unused nf will fall into a "even" position
     // like [0, nf1-1], [nf1+1, nf2-1]
     // but should not be in (nf1-1, nf1+1) = {nf1}

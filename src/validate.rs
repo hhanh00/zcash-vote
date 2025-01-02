@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use ff::PrimeField;
 use orchard::{
     note::{ExtractedNoteCommitment, Nullifier},
     primitives::redpallas::{Binding, Signature, SpendAuth, VerificationKey},
@@ -9,6 +10,7 @@ use orchard::{
     },
     Anchor,
 };
+use pasta_curves::Fp;
 
 use crate::{
     ballot::{Ballot, BallotWitnesses},
@@ -29,10 +31,10 @@ pub fn validate_key(key: String) -> Result<bool, ()> {
     Ok(false)
 }
 
-pub fn validate_ballot(ballot: &str, election: &Election) -> Result<()> {
-    let ballot: Ballot = serde_json::from_str(&ballot)?;
+pub fn validate_ballot(ballot: Ballot, signature_check: bool) -> Result<()> {
     let Ballot { data, witnesses } = ballot;
     let sighash = data.sighash()?;
+    let domain = Fp::from_repr(as_byte256(&data.domain)).unwrap();
 
     log::info!("Verify spending signatures if needed");
     if let Some(sp_signatures) = witnesses.sp_signatures {
@@ -47,7 +49,7 @@ pub fn validate_ballot(ballot: &str, election: &Election) -> Result<()> {
                 rk.try_into().map_err(|_| anyhow!("Invalid public key"))?;
             rk.verify(&sighash, &signature)?;
         }
-    } else if election.signature_required {
+    } else if signature_check {
         anyhow::bail!("Signatures missing");
     }
 
@@ -71,7 +73,6 @@ pub fn validate_ballot(ballot: &str, election: &Election) -> Result<()> {
     log::info!("Verify ZKP");
     for (proof, action) in proofs.into_iter().zip(data.actions.iter()) {
         let proof: Proof<Circuit> = Proof::new(proof.0);
-        let domain = election.domain().0;
         let cmx_root = as_byte256(&data.anchors.cmx);
         let nf_root = as_byte256(&data.anchors.nf);
         let cv_net = as_byte256(&action.cv_net);

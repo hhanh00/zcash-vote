@@ -80,7 +80,7 @@ fn handle_block(
     block: CompactBlock,
 ) -> Result<usize> {
     let mut s_cmx = connection.prepare_cached("INSERT INTO cmxs(hash) VALUES (?1)")?;
-    let mut s_nf = connection.prepare_cached("INSERT INTO nullifiers(hash) VALUES (?1)")?;
+    let mut s_nf = connection.prepare_cached("INSERT INTO nfs(hash) VALUES (?1)")?;
     let mut position = 0usize;
     for tx in block.vtx {
         for a in tx.actions {

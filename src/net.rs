@@ -52,7 +52,7 @@ pub async fn download_reference_data(
         .into_inner();
 
     let mut s_nf = connection.prepare(
-        "INSERT INTO nullifiers(hash, revhash)
+        "INSERT INTO nfs(hash, revhash)
         VALUES (?1, ?2)",
     )?;
     let mut s_cmx = connection.prepare(

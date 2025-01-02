@@ -26,7 +26,7 @@ pub fn list_cmxs(connection: &Connection) -> Result<Vec<Hash>, VoteError> {
 }
 
 pub fn list_nfs(connection: &Connection) -> Result<Vec<Nullifier>, VoteError> {
-    let mut s = connection.prepare("SELECT hash FROM nullifiers ORDER BY revhash")?;
+    let mut s = connection.prepare("SELECT hash FROM nfs ORDER BY revhash")?;
     let rows = s.query_map([], |r| r.get::<_, Vec<u8>>(0))?;
     let mut nfs = vec![];
     for r in rows {

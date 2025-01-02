@@ -6,7 +6,7 @@ use pasta_curves::{group::ff::PrimeField as _, Fp};
 use rusqlite::Connection;
 
 pub fn list_nf_ranges(connection: &Connection) -> Result<Vec<Fp>> {
-    let mut s = connection.prepare("SELECT hash FROM nullifiers")?;
+    let mut s = connection.prepare("SELECT hash FROM nfs")?;
     let rows = s.query_map([], |r| {
         let v = r.get::<_, [u8; 32]>(0)?;
         let v = Fp::from_repr(v).unwrap();
@@ -64,7 +64,7 @@ pub fn build_nf_ranges(nfs: impl IntoIterator<Item = Fp>) -> Vec<Fp> {
     let mut prev = Fp::zero();
     let mut leaves = vec![];
     for r in nfs {
-        // Skip empty ranges when nullifiers are consecutive
+        // Skip empty ranges when nfs are consecutive
         // (with statistically negligible odds)
         if prev < r {
             // Ranges are inclusive of both ends
