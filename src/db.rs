@@ -17,6 +17,7 @@ pub fn create_schema(connection: &Connection) -> Result<()> {
     "CREATE TABLE IF NOT EXISTS ballots(
         id_ballot INTEGER PRIMARY KEY,
         election INTEGER NOT NULL,
+        height INTEGER NOT NULL,
         hash BLOB NOT NULL UNIQUE,
         data BLOB NOT NULL)",
         [],
