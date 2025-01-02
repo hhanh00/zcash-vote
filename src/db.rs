@@ -85,7 +85,7 @@ pub fn load_prop(connection: &Connection, name: &str) -> Result<Option<String>> 
 
 pub fn store_dnf(connection: &Connection, id_election: u32, dnf: &[u8]) -> Result<()> {
     connection.execute(
-        "INSERT INTO dnfs(election, hash)", 
+        "INSERT INTO dnfs(election, hash) VALUES (?1, ?2)",
         params![id_election, dnf]
     )?;
     Ok(())

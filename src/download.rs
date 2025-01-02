@@ -79,8 +79,8 @@ fn handle_block(
     start_position: usize,
     block: CompactBlock,
 ) -> Result<usize> {
-    let mut s_cmx = connection.prepare_cached("INSERT INTO cmxs(hash) VALUES (?1)")?;
-    let mut s_nf = connection.prepare_cached("INSERT INTO nfs(hash) VALUES (?1)")?;
+    let mut s_cmx = connection.prepare_cached("INSERT INTO cmxs(election, hash) VALUES (?1, ?2)")?;
+    let mut s_nf = connection.prepare_cached("INSERT INTO nfs(election, hash) VALUES (?1, ?2)")?;
     let mut position = 0usize;
     for tx in block.vtx {
         for a in tx.actions {
@@ -109,8 +109,8 @@ fn handle_block(
             }
             let nf = &a.nullifier;
             let cmx = &a.cmx;
-            s_nf.execute([nf])?;
-            s_cmx.execute([cmx])?;
+            s_nf.execute(params![id_election, nf])?;
+            s_cmx.execute(params![id_election, cmx])?;
             position += 1;
         }
     }
