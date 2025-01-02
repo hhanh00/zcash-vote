@@ -1,6 +1,6 @@
 use ff::PrimeField;
 use orchard::{
-    note::ExtractedNoteCommitment, tree::{MerkleHashOrchard, MerklePath}, vote::{domain, BallotCircuit, CountCircuit, ElectionDomain, ProvingKey, VerifyingKey}, Address
+    note::ExtractedNoteCommitment, tree::{MerkleHashOrchard, MerklePath}, vote::{domain, empty_hash, BallotCircuit, CountCircuit, ElectionDomain, ProvingKey, VerifyingKey}, Address
 };
 use pasta_curves::Fp;
 use serde::{Deserialize, Serialize};
@@ -34,10 +34,9 @@ pub struct Frontier {
 
 impl Frontier {
     pub fn append(&mut self, cmx: OrchardHash) {
+        let mut er = Fp::from_repr(empty_hash()).unwrap();
         let mut c = Fp::from_repr(self.leaf.0).unwrap();
         let mut p = self.position;
-        assert!(p > 0);
-        p -= 1;
         
         let mut i = 0u8;
         while p > 0 {
@@ -49,9 +48,11 @@ impl Frontier {
                 c = cmx_hash(i, 
                     Fp::from_repr(self.ommers[i as usize].0).unwrap(), 
                     c);
+                self.ommers[i as usize] = OrchardHash(er.to_repr());
             }
             p /= 2;
             i += 1;
+            er = cmx_hash(i, er, er);
         }
         self.leaf = cmx;
         self.position += 1;
