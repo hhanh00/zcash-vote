@@ -7,6 +7,7 @@ use crate::errors::VoteError;
 
 pub async fn download_reference_data(
     connection: PoolConnection,
+    id_election: u32,
     election: &Election,
     fvk: Option<FullViewingKey>,
     lwd_url: &str,
@@ -44,7 +45,7 @@ pub async fn download_reference_data(
             if height % 1000 == 0 || height == end as u32 {
                 progress(block.height as u32);
             }
-            let inc_position = handle_block(&connection, &domain, fvk.as_ref(), pivk.as_ref(), position, block)?;
+            let inc_position = handle_block(&connection, id_election, &domain, fvk.as_ref(), pivk.as_ref(), position, block)?;
             position += inc_position;
         }
 
@@ -71,6 +72,7 @@ pub async fn download_reference_data(
 
 fn handle_block(
     connection: &Connection,
+    id_election: u32,
     domain: &ElectionDomain,
     fvk: Option<&FullViewingKey>,
     pivk: Option<&PreparedIncomingViewingKey>,
@@ -97,9 +99,9 @@ fn handle_block(
                     let rho = note.rho().to_bytes();
                     connection.execute(
                         "INSERT INTO notes
-                        (position, height, txid, value, div, rseed, nf, dnf, rho, spent)
-                        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, NULL)",
-                        params![p, height, txid, value, div.as_array(), rseed, nf, domain_nf, rho],
+                        (election, position, height, txid, value, div, rseed, nf, dnf, rho, spent)
+                        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL)",
+                        params![id_election, p, height, txid, value, div.as_array(), rseed, nf, domain_nf, rho],
                     )?;
 
                     println!("{:?}", note);

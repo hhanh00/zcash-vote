@@ -51,7 +51,7 @@ pub fn vote<R: RngCore + CryptoRng>(
 
     let address = VoteAddress::decode(address)?.0;
 
-    let notes = list_notes(connection, fvk)?;
+    let notes = list_notes(connection, 0, fvk)?;
     let mut total_value = 0;
     let mut inputs = vec![];
     for np in notes {

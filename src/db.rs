@@ -17,6 +17,7 @@ pub fn create_schema(connection: &Connection) -> Result<()> {
     connection.execute(
         "CREATE TABLE IF NOT EXISTS ballots(
             id_ballot INTEGER PRIMARY KEY,
+            election INTEGER NOT NULL,
             hash BLOB NOT NULL UNIQUE,
             data BLOB NOT NULL
         )",
@@ -24,12 +25,14 @@ pub fn create_schema(connection: &Connection) -> Result<()> {
     )?;
     connection.execute(
         "CREATE TABLE IF NOT EXISTS nullifiers(
+        election INTEGER NOT NULL,
         id_nf INTEGER PRIMARY KEY NOT NULL,
         hash BLOB NOT NULL)",
         [],
     )?;
     connection.execute(
         "CREATE TABLE IF NOT EXISTS cmxs(
+        election INTEGER NOT NULL,
         id_cmx INTEGER PRIMARY KEY NOT NULL,
         hash BLOB NOT NULL)",
         [],
@@ -38,6 +41,7 @@ pub fn create_schema(connection: &Connection) -> Result<()> {
     connection.execute(
         "CREATE TABLE IF NOT EXISTS notes(
         id_note INTEGER PRIMARY KEY,
+        election INTEGER NOT NULL,
         position INTEGER NOT NULL UNIQUE,
         height INTEGER NOT NULL,
         txid BLOB NOT NULL,
@@ -74,12 +78,12 @@ pub fn load_prop(connection: &Connection, name: &str) -> Result<Option<String>> 
     Ok(value)
 }
 
-pub fn list_notes(connection: &Connection, fvk: &FullViewingKey) -> Result<Vec<(orchard::Note, u32)>> {
+pub fn list_notes(connection: &Connection, id_election: u32, fvk: &FullViewingKey) -> Result<Vec<(orchard::Note, u32)>> {
     let mut s = connection.prepare(
         "SELECT position, height, txid, value, div, rseed, nf, dnf, rho
-        FROM notes WHERE spent IS NULL",
+        FROM notes WHERE spent IS NULL AND election = ?1",
     )?;
-    let notes = s.query_map([], |r| {
+    let notes = s.query_map([id_election], |r| {
         let position = r.get::<_, u32>(0)?;
         let height = r.get::<_, u32>(1)?;
         let txid = r.get::<_, Vec<u8>>(2)?;
