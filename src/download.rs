@@ -2,7 +2,7 @@ use orchard::{keys::{FullViewingKey, PreparedIncomingViewingKey, Scope}, vote::E
 use rusqlite::{params, Connection};
 use tonic::{transport::Endpoint, Request};
 
-use crate::{decrypt::try_decrypt, rpc::{compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange, CompactBlock}, Election, PoolConnection, Result};
+use crate::{db::store_note, decrypt::try_decrypt, rpc::{compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange, CompactBlock}, Election, PoolConnection, Result};
 use crate::errors::VoteError;
 
 pub async fn download_reference_data(
@@ -86,24 +86,13 @@ fn handle_block(
         for a in tx.actions {
             if let Some(pivk) = pivk {
             if let Some(note) = try_decrypt(pivk, &a)? {
+                    let fvk = fvk.unwrap(); // if we have pivk, we have fvk
                     let p = start_position + position;
                     let height = block.height;
                     let txid = &tx.hash;
-                    let value = note.value().inner();
-                    let div = note.recipient().diversifier();
-                    let rseed = note.rseed().as_bytes();
-                    let nf = note.nullifier(fvk.unwrap()).to_bytes();
-                    let domain_nf = note
-                        .nullifier_domain(fvk.unwrap(), domain.0)
-                        .to_bytes();
-                    let rho = note.rho().to_bytes();
-                    connection.execute(
-                        "INSERT INTO notes
-                        (election, position, height, txid, value, div, rseed, nf, dnf, rho, spent)
-                        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL)",
-                        params![id_election, p, height, txid, value, div.as_array(), rseed, nf, domain_nf, rho],
-                    )?;
-
+                    store_note(connection, 0, domain.0, fvk, height as u32, p as u32, 
+                        txid, &note)?;
+            
                     println!("{:?}", note);
                 }
             }

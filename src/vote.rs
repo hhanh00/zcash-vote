@@ -1,3 +1,4 @@
+use crate::validate::try_decrypt_ballot;
 use crate::{
     // address::VoteAddress,
     address::VoteAddress,
@@ -13,10 +14,11 @@ use crate::{
     validate::{PK, VK},
 };
 use anyhow::Result;
+use orchard::keys::PreparedIncomingViewingKey;
 use orchard::{
     builder::SpendInfo,
     keys::{FullViewingKey, Scope, SpendAuthorizingKey, SpendValidatingKey, SpendingKey},
-    note::{ExtractedNoteCommitment, Nullifier, RandomSeed, TransmittedNoteCiphertext},
+    note::{ExtractedNoteCommitment, Nullifier, RandomSeed},
     note_encryption::OrchardNoteEncryption,
     primitives::redpallas::{Binding, SigningKey, SpendAuth, VerificationKey},
     value::{NoteValue, ValueCommitTrapdoor, ValueCommitment},
@@ -33,7 +35,7 @@ use pasta_curves::{
 };
 use rand_core::{CryptoRng, RngCore};
 use rusqlite::Connection;
-use zcash_note_encryption::{COMPACT_NOTE_SIZE, OUT_CIPHERTEXT_SIZE};
+use zcash_note_encryption::COMPACT_NOTE_SIZE;
 
 pub fn vote<R: RngCore + CryptoRng>(
     connection: &Connection,
@@ -45,12 +47,13 @@ pub fn vote<R: RngCore + CryptoRng>(
     amount: u64,
     mut rng: R,
 ) -> Result<Ballot> {
-    // TODO: get anchors cmx_root and nf_root
+    println!("vote");
     let nfs = list_nf_ranges(connection)?;
     let cmxs = list_cmxs(connection)?;
 
     let address = VoteAddress::decode(address)?.0;
 
+    let pivk = PreparedIncomingViewingKey::new(&fvk.to_ivk(Scope::External));
     let notes = list_notes(connection, 0, fvk)?;
     let mut total_value = 0;
     let mut inputs = vec![];
@@ -61,6 +64,7 @@ pub fn vote<R: RngCore + CryptoRng>(
         inputs.push(np);
         total_value += np.0.value().inner();
     }
+    let self_address = fvk.address_at(0u64, Scope::External);
     let change = total_value - amount;
 
     let n_actions = inputs.len().max(2);
@@ -76,19 +80,18 @@ pub fn vote<R: RngCore + CryptoRng>(
         };
 
         let rho = spend.nullifier_domain(&fvk, domain.0);
+        let rseed = RandomSeed::random(&mut rng, &rho);
         let output = match i {
             0 => {
-                let rseed = RandomSeed::random(&mut rng, &rho);
                 let vote_output =
                     Note::from_parts(address, NoteValue::from_raw(amount), rho, rseed).unwrap();
                 vote_output
             }
             1 => {
-                let rseed = RandomSeed::random(&mut rng, &rho);
-                let self_address = fvk.address_at(0u64, Scope::External);
                 let change_output =
                     Note::from_parts(self_address, NoteValue::from_raw(change), rho, rseed)
                         .unwrap();
+
                 change_output
             }
             _ => {
@@ -138,14 +141,25 @@ pub fn vote<R: RngCore + CryptoRng>(
         let cmx = output.commitment();
         let cmx = ExtractedNoteCommitment::from(cmx);
 
+        let address = output.recipient();
         let encryptor = OrchardNoteEncryption::new(None, output.clone(), address, [0u8; 512]);
-        let encrypted_note = TransmittedNoteCiphertext {
-            epk_bytes: encryptor.epk().to_bytes().0,
-            enc_ciphertext: encryptor.encrypt_note_plaintext(),
-            out_ciphertext: [0u8; OUT_CIPHERTEXT_SIZE],
-        };
+        let epk = encryptor.epk().to_bytes().0;
+        let enc = encryptor.encrypt_note_plaintext();
         let mut compact_enc = [0u8; COMPACT_NOTE_SIZE];
-        compact_enc.copy_from_slice(&encrypted_note.enc_ciphertext[0..COMPACT_NOTE_SIZE]);
+        compact_enc.copy_from_slice(&enc[0..COMPACT_NOTE_SIZE]);
+
+        // println!("i {i}");
+        // if i == 1
+        // {
+        //     let domain = OrchardDomain::for_nullifier(rho.clone());
+        //     let action = CompactAction::from_parts(
+        //         rho,
+        //         cmx.clone(),
+        //         EphemeralKeyBytes(as_byte256(&epk)),
+        //         compact_enc,
+        //     );
+        //     assert!(try_compact_note_decryption(&domain, &pivk, &action).is_some());
+        // }
 
         let rk: [u8; 32] = rk.into();
         let ballot_action = BallotAction {
@@ -153,9 +167,14 @@ pub fn vote<R: RngCore + CryptoRng>(
             rk: rk.to_vec(),
             nf: rho.to_bytes().to_vec(),
             cmx: cmx.to_bytes().to_vec(),
-            epk: encrypted_note.epk_bytes.to_vec(),
+            epk: epk.to_vec(),
             enc: compact_enc.to_vec(),
         };
+
+        if let Some(note) = try_decrypt_ballot(&pivk, &ballot_action)? {
+            println!("vote -> {:?}", note);
+        }
+
         ballot_actions.push(ballot_action);
     }
 

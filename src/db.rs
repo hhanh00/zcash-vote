@@ -1,5 +1,6 @@
 use anyhow::Result;
 use orchard::{keys::{Diversifier, FullViewingKey, Scope}, note::{Nullifier, RandomSeed}, value::NoteValue};
+use pasta_curves::Fp;
 use rusqlite::{params, Connection, OptionalExtension as _};
 use serde::{Deserialize, Serialize};
 
@@ -43,7 +44,12 @@ pub fn create_schema(connection: &Connection) -> Result<()> {
         hash BLOB NOT NULL)",
         [],
     )?;
-
+    connection.execute(
+    "CREATE TABLE IF NOT EXISTS cmx_roots(
+        id_cmx_root INTEGER PRIMARY KEY,
+        election INTEGER NOT NULL,
+        height INTEGER NOT NULL,
+        hash BLOB NOT NULL)", [])?;
     connection.execute(
         "CREATE TABLE IF NOT EXISTS notes(
         id_note INTEGER PRIMARY KEY,
@@ -92,6 +98,27 @@ pub fn store_dnf(connection: &Connection, id_election: u32, dnf: &[u8]) -> Resul
     Ok(())
 }
 
+pub fn store_note(connection: &Connection, id_election: u32, domain: Fp, 
+    fvk: &FullViewingKey,
+    height: u32, position: u32, 
+    txid: &[u8], note: &orchard::Note) -> Result<()> {
+    let value = note.value().inner();
+    let div = note.recipient().diversifier();
+    let rseed = note.rseed().as_bytes();
+    let nf = note.nullifier(fvk).to_bytes();
+    let domain_nf = note
+        .nullifier_domain(fvk, domain)
+        .to_bytes();
+    let rho = note.rho().to_bytes();
+    connection.execute(
+        "INSERT INTO notes
+        (election, position, height, txid, value, div, rseed, nf, dnf, rho, spent)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL)",
+        params![id_election, position, height, txid, value, div.as_array(), rseed, nf, domain_nf, rho],
+    )?;
+    Ok(())
+}
+
 pub fn list_notes(connection: &Connection, id_election: u32, fvk: &FullViewingKey) -> Result<Vec<(orchard::Note, u32)>> {
     let mut s = connection.prepare(
         "SELECT position, height, txid, value, div, rseed, nf, dnf, rho
@@ -123,6 +150,21 @@ pub fn list_notes(connection: &Connection, id_election: u32, fvk: &FullViewingKe
     })?;
 
     Ok(notes.collect::<Result<Vec<_>, _>>()?)
+}
+
+pub fn store_cmx(connection: &Connection, id_election: u32, cmx: &[u8]) -> Result<()> {
+    connection.execute(
+        "INSERT INTO cmxs(election, hash) VALUES (?1, ?2)",
+        params![id_election, cmx])?;
+    Ok(())
+}
+
+pub fn store_cmx_root(connection: &Connection, id_election: u32, height: u32, cmx_root: &[u8]) -> Result<()> {
+    connection.execute(
+        "INSERT INTO cmx_roots
+        (election, height, hash)
+        VALUES (?1, ?2, ?3)", params![id_election, height, cmx_root])?;
+    Ok(())
 }
 
 #[derive(Clone, Serialize, Deserialize, Default, Debug)]

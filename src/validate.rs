@@ -1,20 +1,17 @@
 use anyhow::{anyhow, Result};
 use ff::PrimeField;
 use orchard::{
-    note::{ExtractedNoteCommitment, Nullifier},
-    primitives::redpallas::{Binding, Signature, SpendAuth, VerificationKey},
-    value::ValueCommitment,
-    vote::{
+    keys::PreparedIncomingViewingKey, note::{ExtractedNoteCommitment, Nullifier}, note_encryption::{CompactAction, OrchardDomain}, primitives::redpallas::{Binding, Signature, SpendAuth, VerificationKey}, value::ValueCommitment, vote::{
         circuit::Instance, proof::Proof, BallotCircuit as Circuit, ElectionDomain, ProvingKey,
         VerifyingKey,
-    },
-    Anchor,
+    }, Anchor, Note
 };
 use pasta_curves::Fp;
+use zcash_note_encryption::{try_compact_note_decryption, EphemeralKeyBytes};
 
 use crate::{
-    ballot::{Ballot, BallotWitnesses},
-    CtOpt, Election,
+    ballot::{Ballot, BallotAction, BallotWitnesses},
+    CtOpt,
 };
 use bip0039::Mnemonic;
 use zcash_address::unified::Encoding;
@@ -96,6 +93,30 @@ pub fn validate_ballot(ballot: Ballot, signature_check: bool) -> Result<()> {
     // TODO: Verify anchors
 
     Ok(())
+}
+
+pub fn try_decrypt_ballot(
+    ivk: &PreparedIncomingViewingKey,
+    action: &BallotAction,
+) -> Result<Option<Note>> {
+    let BallotAction {
+        nf,
+        cmx,
+        epk,
+        enc,
+        ..
+    } = action;
+
+    let rho = Nullifier::from_bytes(&as_byte256(&nf)).unwrap();
+    let domain = OrchardDomain::for_nullifier(rho.clone());
+    let action = CompactAction::from_parts(
+        rho,
+        ExtractedNoteCommitment::from_bytes(&as_byte256(&cmx)).unwrap(),
+        EphemeralKeyBytes(as_byte256(&epk)),
+        enc.clone().try_into().unwrap(),
+    );
+    let note = try_compact_note_decryption(&domain, ivk, &action).map(|na| na.0);
+    Ok(note)
 }
 
 lazy_static::lazy_static! {
