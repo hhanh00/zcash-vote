@@ -26,7 +26,7 @@ pub fn to_fvk(key: &str) -> Result<FullViewingKey> {
     if let Some(spk) = to_sk(key)? {
         return Ok(FullViewingKey::from(&spk));
     } else {
-        let (_, ufvk) = unified::Ufvk::decode(&key)?;
+        let (_, ufvk) = unified::Ufvk::decode(key)?;
         for fvk in ufvk.items() {
             if let Fvk::Orchard(fvk) = fvk {
                 let fvk = FullViewingKey::from_bytes(&fvk).unwrap();
@@ -48,12 +48,12 @@ pub fn try_decrypt(
         ciphertext,
     } = action;
 
-    let rho = Nullifier::from_bytes(&as_byte256(&nullifier)).unwrap();
-    let domain = OrchardDomain::for_nullifier(rho.clone());
+    let rho = Nullifier::from_bytes(&as_byte256(nullifier)).unwrap();
+    let domain = OrchardDomain::for_nullifier(rho);
     let action = CompactAction::from_parts(
         rho,
-        ExtractedNoteCommitment::from_bytes(&as_byte256(&cmx)).unwrap(),
-        EphemeralKeyBytes(as_byte256(&ephemeral_key)),
+        ExtractedNoteCommitment::from_bytes(&as_byte256(cmx)).unwrap(),
+        EphemeralKeyBytes(as_byte256(ephemeral_key)),
         ciphertext.clone().try_into().unwrap(),
     );
     let note = try_compact_note_decryption(&domain, ivk, &action).map(|na| na.0);

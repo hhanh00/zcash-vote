@@ -1,5 +1,6 @@
 use orchard::{
-    vote::{Circuit, Frontier, OrchardHash, ProvingKey, VerifyingKey}, Address
+    vote::{Circuit, Frontier, OrchardHash, ProvingKey, VerifyingKey},
+    Address,
 };
 use pasta_curves::Fp;
 use serde::{Deserialize, Serialize};
@@ -21,7 +22,7 @@ impl CandidateChoice {
     }
 }
 
-///
+/// Details of an election, including metadata, candidates, and election parameters.
 #[derive(Clone, Serialize, Deserialize, Default, Debug)]
 pub struct Election {
     pub id: String,

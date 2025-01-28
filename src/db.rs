@@ -231,7 +231,7 @@ impl Note {
         let note = orchard::Note::from_parts(
             recipient,
             NoteValue::from_raw(self.value),
-            rho.clone(),
+            rho,
             RandomSeed::from_bytes(as_byte256(&self.rseed), &rho).unwrap(),
         )
         .unwrap();
