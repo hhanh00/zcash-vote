@@ -118,8 +118,6 @@ fn handle_block(
                         txid,
                         &note,
                     )?;
-
-                    println!("{:?}", note);
                 }
             }
             let nf = &a.nullifier;
