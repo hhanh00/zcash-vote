@@ -44,6 +44,6 @@ features = [ "transparent-inputs" ]
 
 [patch.crates-io]
 #orchard = { path = "../../../ywallet/orchard" }
-orchard = {git = "https://github.com/hhanh00/orchard.git", rev="a2ec07c"}
+orchard = {git = "https://github.com/hhanh00/orchard.git", rev="dff7dee"}
 halo2_gadgets  = { git = "https://github.com/zcash/halo2.git", rev = "642924d614305d882cc122739c59144109f4bd3f" }
 halo2_proofs = { git = "https://github.com/zcash/halo2.git", rev = "642924d614305d882cc122739c59144109f4bd3f" }
