@@ -123,7 +123,7 @@ pub fn store_note(
     position: u32,
     txid: &[u8],
     note: &orchard::Note,
-) -> Result<()> {
+) -> Result<u32> {
     let value = note.value().inner();
     let div = note.recipient().diversifier();
     let rseed = note.rseed().as_bytes();
@@ -147,6 +147,14 @@ pub fn store_note(
             rho
         ],
     )?;
+    let id = connection.last_insert_rowid() as u32;
+    Ok(id)
+}
+
+pub fn mark_spent(connection: &Connection, id: u32, height: u32) -> Result<()> {
+    connection.execute(
+        "UPDATE notes SET spent = ?2 WHERE id_note = ?1",
+        params![id, height])?;
     Ok(())
 }
 

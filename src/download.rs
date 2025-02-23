@@ -1,8 +1,12 @@
+use std::collections::HashMap;
+
 use orchard::keys::{FullViewingKey, PreparedIncomingViewingKey, Scope};
 use pasta_curves::Fp;
 use rusqlite::{params, Connection};
 use tonic::{transport::Endpoint, Request};
 
+use crate::as_byte256;
+use crate::db::mark_spent;
 use crate::errors::VoteError;
 use crate::{
     db::store_note,
@@ -47,6 +51,7 @@ pub async fn download_reference_data(
             .await?
             .into_inner();
         let mut position = 0usize;
+        let mut nfs_cache = HashMap::new();
         while let Some(block) = blocks.message().await? {
             let height = block.height as u32;
             if height % 1000 == 0 || height == end as u32 {
@@ -60,6 +65,7 @@ pub async fn download_reference_data(
                 pivk.as_ref(),
                 position,
                 block,
+                &mut nfs_cache,
             )?;
             position += inc_position;
         }
@@ -95,6 +101,7 @@ fn handle_block(
     pivk: Option<&PreparedIncomingViewingKey>,
     start_position: usize,
     block: CompactBlock,
+    nfs_cache: &mut HashMap<[u8; 32], u32>,
 ) -> Result<usize> {
     let mut s_cmx =
         connection.prepare_cached("INSERT INTO cmxs(election, hash) VALUES (?1, ?2)")?;
@@ -108,7 +115,7 @@ fn handle_block(
                     let p = start_position + position;
                     let height = block.height;
                     let txid = &tx.hash;
-                    store_note(
+                    let id = store_note(
                         connection,
                         0,
                         domain,
@@ -118,12 +125,16 @@ fn handle_block(
                         txid,
                         &note,
                     )?;
+                    nfs_cache.insert(note.nullifier(fvk).to_bytes(), id);
                 }
             }
             let nf = &a.nullifier;
             let cmx = &a.cmx;
             s_nf.execute(params![id_election, nf])?;
             s_cmx.execute(params![id_election, cmx])?;
+            if let Some(id) = nfs_cache.get(&as_byte256(nf)) {
+                mark_spent(connection, *id, block.height as u32)?;
+            }
             position += 1;
         }
     }
