@@ -14,6 +14,7 @@ pub mod errors;
 pub type Result<T> = std::result::Result<T, VoteError>;
 pub type PoolConnection = PooledConnection<SqliteConnectionManager>;
 
+pub mod pb;
 pub mod address;
 pub mod db;
 pub mod decrypt;

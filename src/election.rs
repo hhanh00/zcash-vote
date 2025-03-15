@@ -3,9 +3,10 @@ use orchard::{
     Address,
 };
 use pasta_curves::Fp;
+use prost::Message;
 use serde::{Deserialize, Serialize};
 
-use crate::{address::VoteAddress, errors::VoteError};
+use crate::{address::VoteAddress, errors::VoteError, pb::{self, Candidate}};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CandidateChoice {
@@ -45,7 +46,22 @@ impl Election {
     }
 
     pub fn domain(&self) -> Fp {
-        orchard::vote::calculate_domain(self.name.as_bytes())
+        let election_params = pb::Election {
+            name: self.name.clone(),
+            start_height: self.start_height,
+            end_height: self.end_height,
+            question: self.question.clone(),
+            candidates: self.candidates.iter().map(|c|
+                Candidate {
+                    address: c.address.clone(),
+                    choice: c.choice.clone(),
+                }
+            ).collect(),
+            signature_required: self.signature_required,
+        };
+        let election_params = election_params.encode_to_vec();
+
+        orchard::vote::calculate_domain(&election_params)
     }
 }
 
