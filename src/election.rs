@@ -3,6 +3,7 @@ use orchard::{
     Address,
 };
 use pasta_curves::Fp;
+use pasta_curves::group::ff::PrimeField as _;
 use prost::Message;
 use serde::{Deserialize, Serialize};
 
@@ -26,7 +27,6 @@ impl CandidateChoice {
 /// Details of an election, including metadata, candidates, and election parameters.
 #[derive(Clone, Serialize, Deserialize, Default, Debug)]
 pub struct Election {
-    pub id: String,
     pub name: String,
     pub start_height: u32,
     pub end_height: u32,
@@ -43,6 +43,10 @@ impl Election {
         let election: Election =
             serde_json::from_str(json).map_err(|e| VoteError::InvalidJson(e.to_string()))?;
         Ok(election)
+    }
+
+    pub fn id(&self) -> String {
+        hex::encode(self.domain().to_repr())
     }
 
     pub fn domain(&self) -> Fp {
