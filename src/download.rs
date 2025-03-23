@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use orchard::keys::{FullViewingKey, PreparedIncomingViewingKey, Scope};
 use pasta_curves::Fp;
 use rusqlite::{params, Connection};
-use tonic::{transport::Endpoint, Request};
+use tonic::transport::{Certificate, ClientTlsConfig};
+use tonic::Request;
 
 use crate::as_byte256;
 use crate::db::mark_spent;
@@ -34,7 +35,13 @@ pub async fn download_reference_data(
     let lwd_url = lwd_url.to_string();
 
     let task = tokio::spawn(async move {
-        let ep = Endpoint::from_shared(lwd_url)?;
+        let mut ep = tonic::transport::Channel::from_shared(lwd_url.to_owned())?;
+        if lwd_url.starts_with("https") {
+            let pem = include_bytes!("ca.pem");
+            let ca = Certificate::from_pem(pem);
+            let tls = ClientTlsConfig::new().ca_certificate(ca);
+            ep = ep.tls_config(tls)?;
+        }
         let mut client = CompactTxStreamerClient::connect(ep).await?;
         let mut blocks = client
             .get_block_range(Request::new(BlockRange {
