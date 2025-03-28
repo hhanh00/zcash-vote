@@ -37,9 +37,9 @@ subtle = "2.4.1"
 rand_core = "0.6.4"
 
 [dependencies.zcash_primitives]
-git = "https://github.com/zcash/librustzcash.git"
-rev = "b77c95258"
-#path = "../librustzcash/zcash_primitives"
+version = "0.10.2"
+#git = "https://github.com/hhanh00/librustzcash.git"
+#rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646"
 features = [ "transparent-inputs" ]
 
 [patch.crates-io]
