@@ -2,9 +2,8 @@ use std::collections::HashMap;
 
 use orchard::keys::{FullViewingKey, PreparedIncomingViewingKey, Scope};
 use pasta_curves::Fp;
-use rusqlite::{params, Connection};
-use tonic::transport::{Certificate, ClientTlsConfig};
-use tonic::Request;
+use sqlx::SqlitePool;
+use tonic::{transport::Endpoint, Request};
 
 use crate::as_byte256;
 use crate::db::mark_spent;
@@ -14,18 +13,18 @@ use crate::{
     decrypt::try_decrypt,
     election::Election,
     rpc::{compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange, CompactBlock},
-    PoolConnection, Result,
+    Result,
 };
 
 pub async fn download_reference_data(
-    connection: PoolConnection,
+    connection: &SqlitePool,
     id_election: u32,
     election: &Election,
     fvk: Option<FullViewingKey>,
     scope: Scope,
     lwd_url: &str,
     progress: impl Fn(u32) + Send + 'static,
-) -> Result<(PoolConnection, u32)> {
+) -> Result<u32> {
     let pivk = fvk.clone().map(|fvk| {
         let ivk = fvk.to_ivk(scope);
         PreparedIncomingViewingKey::new(&ivk)
@@ -35,14 +34,9 @@ pub async fn download_reference_data(
     let end = election.end_height as u64;
     let lwd_url = lwd_url.to_string();
 
+    let connection2 = connection.clone();
     let task = tokio::spawn(async move {
-        let mut ep = tonic::transport::Channel::from_shared(lwd_url.to_owned())?;
-        if lwd_url.starts_with("https") {
-            let pem = include_bytes!("ca.pem");
-            let ca = Certificate::from_pem(pem);
-            let tls = ClientTlsConfig::new().ca_certificate(ca);
-            ep = ep.tls_config(tls)?;
-        }
+        let ep = Endpoint::from_shared(lwd_url)?;
         let mut client = CompactTxStreamerClient::connect(ep).await?;
         let mut blocks = client
             .get_block_range(Request::new(BlockRange {
@@ -66,7 +60,7 @@ pub async fn download_reference_data(
                 progress(block.height as u32);
             }
             let inc_position = handle_block(
-                &connection,
+                &connection2,
                 id_election,
                 domain,
                 fvk.as_ref(),
@@ -74,16 +68,15 @@ pub async fn download_reference_data(
                 position,
                 block,
                 &mut nfs_cache,
-            )?;
+            ).await?;
             position += inc_position;
         }
 
-        Ok::<_, VoteError>(connection)
+        Ok::<_, VoteError>(())
     });
 
-    let connection = tokio::spawn(async move {
+    tokio::spawn(async move {
         match task.await {
-            Ok(Ok(connection)) => Ok(connection),
             Ok(Err(err)) => {
                 eprintln!("Task returned an error: {}", err);
                 Err(err)
@@ -93,16 +86,17 @@ pub async fn download_reference_data(
                 let e: anyhow::Error = err.into();
                 Err(e.into())
             }
+            Ok(_) => Ok(()),
         }
     })
     .await
     .unwrap()?;
 
-    Ok((connection, end as u32))
+    Ok(end as u32)
 }
 
-fn handle_block(
-    connection: &Connection,
+async fn handle_block(
+    connection: &SqlitePool,
     id_election: u32,
     domain: Fp,
     fvk: Option<&FullViewingKey>,
@@ -111,9 +105,6 @@ fn handle_block(
     block: CompactBlock,
     nfs_cache: &mut HashMap<[u8; 32], u32>,
 ) -> Result<usize> {
-    let mut s_cmx =
-        connection.prepare_cached("INSERT INTO cmxs(election, hash) VALUES (?1, ?2)")?;
-    let mut s_nf = connection.prepare_cached("INSERT INTO nfs(election, hash) VALUES (?1, ?2)")?;
     let mut position = 0usize;
     for tx in block.vtx {
         for a in tx.actions {
@@ -132,16 +123,26 @@ fn handle_block(
                         p as u32,
                         txid,
                         &note,
-                    )?;
+                    ).await?;
                     nfs_cache.insert(note.nullifier(fvk).to_bytes(), id);
                 }
             }
             let nf = &a.nullifier;
             let cmx = &a.cmx;
-            s_nf.execute(params![id_election, nf])?;
-            s_cmx.execute(params![id_election, cmx])?;
+
+            sqlx::query("INSERT INTO nfs(election, hash) VALUES (?1, ?2)")
+                .bind(id_election)
+                .bind(nf)
+                .execute(connection)
+                .await?;
+
+            sqlx::query("INSERT INTO cmxs(election, hash) VALUES (?, ?)")
+                .bind(id_election)
+                .bind(cmx)
+                .execute(connection)
+                .await?;
             if let Some(id) = nfs_cache.get(&as_byte256(nf)) {
-                mark_spent(connection, *id, block.height as u32)?;
+                mark_spent(connection, *id, block.height as u32).await?;
             }
             position += 1;
         }
