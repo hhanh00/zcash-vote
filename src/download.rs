@@ -21,11 +21,12 @@ pub async fn download_reference_data(
     id_election: u32,
     election: &Election,
     fvk: Option<FullViewingKey>,
+    scope: Scope,
     lwd_url: &str,
     progress: impl Fn(u32) + Send + 'static,
 ) -> Result<(PoolConnection, u32)> {
     let pivk = fvk.clone().map(|fvk| {
-        let ivk = fvk.to_ivk(Scope::External);
+        let ivk = fvk.to_ivk(scope);
         PreparedIncomingViewingKey::new(&ivk)
     });
     let domain = election.domain();
