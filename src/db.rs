@@ -162,6 +162,7 @@ pub fn list_notes(
     connection: &Connection,
     id_election: u32,
     fvk: &FullViewingKey,
+    scope: Scope,
 ) -> Result<Vec<(orchard::Note, u32)>> {
     let mut s = connection.prepare(
         "SELECT position, height, txid, value, div, rseed, nf, dnf, rho
@@ -189,7 +190,7 @@ pub fn list_notes(
             dnf,
             rho,
         };
-        Ok(n.to_note(fvk))
+        Ok(n.to_note(fvk, scope))
     })?;
 
     Ok(notes.collect::<Result<Vec<_>, _>>()?)
@@ -232,9 +233,9 @@ pub struct Note {
 }
 
 impl Note {
-    fn to_note(&self, fvk: &FullViewingKey) -> (orchard::Note, u32) {
+    fn to_note(&self, fvk: &FullViewingKey, scope: Scope) -> (orchard::Note, u32) {
         let d = Diversifier::from_bytes(self.div.clone().try_into().unwrap());
-        let recipient = fvk.address(d, Scope::External);
+        let recipient = fvk.address(d, scope);
         let rho = Nullifier::from_bytes(&as_byte256(&self.rho)).unwrap();
         let note = orchard::Note::from_parts(
             recipient,
