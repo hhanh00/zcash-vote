@@ -1,7 +1,7 @@
 use anyhow::Result;
 use orchard::{
     keys::{Diversifier, FullViewingKey, Scope},
-    note::{Nullifier, RandomSeed},
+    note::{Nullifier, RandomSeed, Rho},
     value::NoteValue,
 };
 use pasta_curves::Fp;
@@ -260,6 +260,7 @@ impl Note {
         let d = Diversifier::from_bytes(self.div.clone().try_into().unwrap());
         let recipient = fvk.address(d, scope);
         let rho = Nullifier::from_bytes(&as_byte256(&self.rho)).unwrap();
+        let rho = Rho::from_nf_old(rho);
         let note = orchard::Note::from_parts(
             recipient,
             NoteValue::from_raw(self.value),
