@@ -14,9 +14,6 @@ orchard = { version = "0.3.0", features = ["vote"] }
 prost = "0.10.3"
 tokio = { version = "1.6", features = ["rt-multi-thread", "tokio-macros"] }
 tonic = { version = "0.7.2", features = ["tls", "tls-roots"] }
-rusqlite = { version = "0.29.0", features = ["bundled"] }
-r2d2_sqlite = "0.22"
-r2d2 = "0.8"
 pasta_curves = "0.5"
 blake2b_simd = "1.0.0"
 ff = "0.13"
@@ -36,6 +33,9 @@ incrementalmerkletree = "0.3.1"
 subtle = "2.4.1"
 rand_core = "0.6.4"
 
+sqlx = {version = "0.6", default-features = false, features = ["sqlite", "macros", "migrate", "runtime-tokio-rustls"]}
+libsqlite3-sys = { version = "0.24", features = ["bundled-sqlcipher-vendored-openssl"] }
+
 [dependencies.zcash_primitives]
 version = "0.10.2"
 #git = "https://github.com/hhanh00/librustzcash.git"
@@ -44,7 +44,7 @@ features = [ "transparent-inputs" ]
 
 [patch.crates-io]
 #orchard = { path = "../../../ywallet/orchard" }
-orchard = {git = "https://github.com/hhanh00/orchard.git", rev="768c365"}
+orchard = {git = "https://github.com/hhanh00/orchard.git", rev="10afda2b41fa51650a1679275f37718f11d0c735"}
 halo2_gadgets  = { git = "https://github.com/zcash/halo2.git", rev = "642924d614305d882cc122739c59144109f4bd3f" }
 halo2_proofs = { git = "https://github.com/zcash/halo2.git", rev = "642924d614305d882cc122739c59144109f4bd3f" }
 

@@ -5,68 +5,75 @@ use orchard::{
     value::NoteValue,
 };
 use pasta_curves::Fp;
-use rusqlite::{params, Connection, OptionalExtension as _};
 use serde::{Deserialize, Serialize};
+use sqlx::{sqlite::SqliteRow, Row, SqlitePool};
 
 use crate::as_byte256;
 
-pub fn create_schema(connection: &Connection) -> Result<()> {
-    connection.execute(
+pub async fn create_schema(connection: &SqlitePool) -> Result<()> {
+    sqlx::query(
         "CREATE TABLE IF NOT EXISTS properties(
         id_property INTEGER PRIMARY KEY,
         name TEXT NOT NULL UNIQUE,
         value TEXT NOT NULL)",
-        [],
-    )?;
-    connection.execute(
+    )
+    .execute(connection)
+    .await?;
+    sqlx::query(
         "CREATE TABLE IF NOT EXISTS ballots(
         id_ballot INTEGER PRIMARY KEY,
         election INTEGER NOT NULL,
         height INTEGER NOT NULL,
         hash BLOB NOT NULL UNIQUE,
         data BLOB NOT NULL)",
-        [],
-    )?;
-    connection.execute(
+    )
+    .execute(connection)
+    .await?;
+    sqlx::query(
         "CREATE TABLE IF NOT EXISTS nfs(
         id_nf INTEGER PRIMARY KEY NOT NULL,
         election INTEGER NOT NULL,
         hash BLOB NOT NULL UNIQUE)",
-        [],
-    )?;
-    connection.execute(
+    )
+    .execute(connection)
+    .await?;
+    sqlx::query(
         "CREATE TABLE IF NOT EXISTS dnfs(
         id_dnf INTEGER PRIMARY KEY NOT NULL,
         election INTEGER NOT NULL,
         hash BLOB NOT NULL UNIQUE)",
-        [],
-    )?;
-    connection.execute(
+    )
+    .execute(connection)
+    .await?;
+    sqlx::query(
         "CREATE TABLE IF NOT EXISTS cmxs(
         id_cmx INTEGER PRIMARY KEY NOT NULL,
         election INTEGER NOT NULL,
         hash BLOB NOT NULL UNIQUE)",
-        [],
-    )?;
-    connection.execute(
+    )
+    .execute(connection)
+    .await?;
+    sqlx::query(
         "CREATE TABLE IF NOT EXISTS cmx_roots(
         id_cmx_root INTEGER PRIMARY KEY,
         election INTEGER NOT NULL,
         height INTEGER NOT NULL,
         hash BLOB NOT NULL,
         CONSTRAINT u_cmx_roots UNIQUE (election, hash))",
-        [],
-    )?;
-    connection.execute(
+    )
+    .execute(connection)
+    .await?;
+    sqlx::query(
         "CREATE TABLE IF NOT EXISTS cmx_frontiers(
         id_cmx_frontier INTEGER PRIMARY KEY,
         election INTEGER NOT NULL,
         height INTEGER NOT NULL,
         frontier TEXT NOT NULL,
         CONSTRAINT u_cmx_frontiers UNIQUE (election, height))",
-        [],
-    )?;
-    connection.execute(
+    )
+    .execute(connection)
+    .await?;
+    sqlx::query(
         "CREATE TABLE IF NOT EXISTS notes(
         id_note INTEGER PRIMARY KEY,
         election INTEGER NOT NULL,
@@ -80,42 +87,48 @@ pub fn create_schema(connection: &Connection) -> Result<()> {
         dnf BLOB NOT NULL,
         rho BLOB NOT NULL,
         spent INTEGER)",
-        [],
-    )?;
+    )
+    .execute(connection)
+    .await?;
 
     Ok(())
 }
 
-pub fn store_prop(connection: &Connection, name: &str, value: &str) -> Result<()> {
-    connection.execute(
-        "INSERT INTO properties(name, value) VALUES (?1, ?2)
+pub async fn store_prop(connection: &SqlitePool, name: &str, value: &str) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO properties(name, value) VALUES (?, ?)
         ON CONFLICT (name) DO UPDATE SET value = excluded.value",
-        params![name, value],
-    )?;
+    )
+    .bind(name)
+    .bind(value)
+    .execute(connection)
+    .await?;
     Ok(())
 }
 
-pub fn load_prop(connection: &Connection, name: &str) -> Result<Option<String>> {
-    let value = connection
-        .query_row(
-            "SELECT value FROM properties WHERE name = ?1",
-            [name],
-            |r| r.get::<_, String>(0),
-        )
-        .optional()?;
+pub async fn load_prop(connection: &SqlitePool, name: &str) -> Result<Option<String>> {
+    let value = sqlx::query("SELECT value FROM properties WHERE name = ?")
+        .bind(name)
+        .map(|row: SqliteRow| {
+            let value: String = row.get(0);
+            value
+        })
+        .fetch_optional(connection)
+        .await?;
     Ok(value)
 }
 
-pub fn store_dnf(connection: &Connection, id_election: u32, dnf: &[u8]) -> Result<()> {
-    connection.execute(
-        "INSERT INTO dnfs(election, hash) VALUES (?1, ?2)",
-        params![id_election, dnf],
-    )?;
+pub async fn store_dnf(connection: &SqlitePool, id_election: u32, dnf: &[u8]) -> Result<()> {
+    sqlx::query("INSERT INTO dnfs(election, hash) VALUES (?, ?)")
+        .bind(id_election)
+        .bind(dnf)
+        .execute(connection)
+        .await?;
     Ok(())
 }
 
-pub fn store_note(
-    connection: &Connection,
+pub async fn store_note(
+    connection: &SqlitePool,
     id_election: u32,
     domain: Fp,
     fvk: &FullViewingKey,
@@ -130,92 +143,102 @@ pub fn store_note(
     let nf = note.nullifier(fvk).to_bytes();
     let domain_nf = note.nullifier_domain(fvk, domain).to_bytes();
     let rho = note.rho().to_bytes();
-    connection.execute(
+    let r = sqlx::query(
         "INSERT INTO notes
         (election, position, height, txid, value, div, rseed, nf, dnf, rho, spent)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL)",
-        params![
-            id_election,
-            position,
-            height,
-            txid,
-            value,
-            div.as_array(),
-            rseed,
-            nf,
-            domain_nf,
-            rho
-        ],
-    )?;
-    let id = connection.last_insert_rowid() as u32;
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)",
+    )
+    .bind(id_election)
+    .bind(position)
+    .bind(height)
+    .bind(txid)
+    .bind(value as i64)
+    .bind(div.as_array().as_slice())
+    .bind(rseed.as_slice())
+    .bind(nf.as_slice())
+    .bind(domain_nf.as_slice())
+    .bind(rho.as_slice())
+    .execute(connection)
+    .await?;
+    let id = r.last_insert_rowid() as u32;
     Ok(id)
 }
 
-pub fn mark_spent(connection: &Connection, id: u32, height: u32) -> Result<()> {
-    connection.execute(
-        "UPDATE notes SET spent = ?2 WHERE id_note = ?1",
-        params![id, height])?;
+pub async fn mark_spent(connection: &SqlitePool, id: u32, height: u32) -> Result<()> {
+    sqlx::query("UPDATE notes SET spent = ? WHERE id_note = ?")
+        .bind(height)
+        .bind(id)
+        .execute(connection)
+        .await?;
     Ok(())
 }
 
-pub fn list_notes(
-    connection: &Connection,
+pub async fn list_notes(
+    connection: &SqlitePool,
     id_election: u32,
     fvk: &FullViewingKey,
     scope: Scope,
 ) -> Result<Vec<(orchard::Note, u32)>> {
-    let mut s = connection.prepare(
+    let notes = sqlx::query(
         "SELECT position, height, txid, value, div, rseed, nf, dnf, rho
-        FROM notes WHERE spent IS NULL AND election = ?1",
-    )?;
-    let notes = s.query_map([id_election], |r| {
-        let position = r.get::<_, u32>(0)?;
-        let height = r.get::<_, u32>(1)?;
-        let txid = r.get::<_, Vec<u8>>(2)?;
-        let value = r.get::<_, u64>(3)?;
-        let div = r.get::<_, Vec<u8>>(4)?;
-        let rseed = r.get::<_, Vec<u8>>(5)?;
-        let nf = r.get::<_, Vec<u8>>(6)?;
-        let dnf = r.get::<_, Vec<u8>>(7)?;
-        let rho = r.get::<_, Vec<u8>>(8)?;
+        FROM notes WHERE spent IS NULL AND election = ?",
+    )
+    .bind(id_election)
+    .map(|row: SqliteRow| {
+        let position: u32 = row.get(0);
+        let height: u32 = row.get(1);
+        let txid: Vec<u8> = row.get(2);
+        let value: i64 = row.get(3);
+        let div: Vec<u8> = row.get(4);
+        let rseed: Vec<u8> = row.get(5);
+        let nf: Vec<u8> = row.get(6);
+        let dnf: Vec<u8> = row.get(7);
+        let rho: Vec<u8> = row.get(8);
 
         let n = Note {
             position,
             height,
             txid,
-            value,
+            value: value as u64,
             div,
             rseed,
             nf,
             dnf,
             rho,
         };
-        Ok(n.to_note(fvk, scope))
-    })?;
+        n.to_note(fvk, scope)
+    })
+    .fetch_all(connection)
+    .await?;
 
-    Ok(notes.collect::<Result<Vec<_>, _>>()?)
+    Ok(notes)
 }
 
-pub fn store_cmx(connection: &Connection, id_election: u32, cmx: &[u8]) -> Result<()> {
-    connection.execute(
-        "INSERT INTO cmxs(election, hash) VALUES (?1, ?2)",
-        params![id_election, cmx],
-    )?;
+pub async fn store_cmx(connection: &SqlitePool, id_election: u32, cmx: &[u8]) -> Result<()> {
+    sqlx::query("INSERT INTO cmxs(election, hash) VALUES (?, ?)")
+        .bind(id_election)
+        .bind(cmx)
+        .execute(connection)
+        .await?;
     Ok(())
 }
 
-pub fn store_cmx_root(
-    connection: &Connection,
+pub async fn store_cmx_root(
+    connection: &SqlitePool,
     id_election: u32,
     height: u32,
     cmx_root: &[u8],
 ) -> Result<()> {
-    connection.execute(
+    sqlx::query(
         "INSERT INTO cmx_roots
         (election, height, hash)
-        VALUES (?1, ?2, ?3)",
-        params![id_election, height, cmx_root],
-    )?;
+        VALUES (?, ?, ?)",
+    )
+    .bind(id_election)
+    .bind(height)
+    .bind(cmx_root)
+    .execute(connection)
+    .await?;
     Ok(())
 }
 

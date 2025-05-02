@@ -1,7 +1,5 @@
 use errors::VoteError;
 use orchard::{note::Nullifier, tree::MerklePath, Note};
-use r2d2::PooledConnection;
-use r2d2_sqlite::SqliteConnectionManager;
 
 pub type Hash = [u8; 32];
 pub const DEPTH: usize = 32;
@@ -12,7 +10,6 @@ pub mod rpc;
 pub mod errors;
 
 pub type Result<T> = std::result::Result<T, VoteError>;
-pub type PoolConnection = PooledConnection<SqliteConnectionManager>;
 
 pub mod pb;
 pub mod address;
