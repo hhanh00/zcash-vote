@@ -1,21 +1,22 @@
 use anyhow::{anyhow, Result};
-use bip0039::Mnemonic;
+use bip0039::{English, Mnemonic};
 use orchard::{
     keys::{FullViewingKey, PreparedIncomingViewingKey, SpendingKey},
-    note::{ExtractedNoteCommitment, Nullifier},
+    note::{ExtractedNoteCommitment, Nullifier, Rho},
     note_encryption::{CompactAction, OrchardDomain},
     Note,
 };
 use zcash_address::unified::{self, Container, Encoding, Fvk};
 use zcash_note_encryption::{try_compact_note_decryption, EphemeralKeyBytes};
+use zcash_primitives::zip32::AccountId;
 
 use crate::{as_byte256, rpc::CompactOrchardAction};
 
 pub fn to_sk(key: &str) -> Result<Option<SpendingKey>> {
-    if let Ok(m) = Mnemonic::from_phrase(key) {
+    if let Ok(m) = Mnemonic::<English>::from_phrase(key) {
         let seed = m.to_seed("");
         let spk =
-            SpendingKey::from_zip32_seed(&seed, zcash_primitives::constants::mainnet::COIN_TYPE, 0)
+            SpendingKey::from_zip32_seed(&seed, zcash_primitives::constants::mainnet::COIN_TYPE, AccountId::ZERO)
                 .map_err(|_| anyhow!("Failed to derive zip-32"))?;
         return Ok(Some(spk));
     }
@@ -48,10 +49,11 @@ pub fn try_decrypt(
         ciphertext,
     } = action;
 
-    let rho = Nullifier::from_bytes(&as_byte256(nullifier)).unwrap();
-    let domain = OrchardDomain::for_nullifier(rho);
+    let nf = Nullifier::from_bytes(&as_byte256(nullifier)).unwrap();
+    let rho = Rho::from_nf_old(nf);
+    let domain = OrchardDomain::for_rho(rho);
     let action = CompactAction::from_parts(
-        rho,
+        nf,
         ExtractedNoteCommitment::from_bytes(&as_byte256(cmx)).unwrap(),
         EphemeralKeyBytes(as_byte256(ephemeral_key)),
         ciphertext.clone().try_into().unwrap(),
