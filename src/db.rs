@@ -6,7 +6,7 @@ use orchard::{
 };
 use pasta_curves::Fp;
 use serde::{Deserialize, Serialize};
-use sqlx::{sqlite::SqliteRow, Row, SqlitePool};
+use sqlx::{sqlite::SqliteRow, Executor, Row, Sqlite, SqlitePool};
 
 use crate::as_byte256;
 
@@ -128,8 +128,8 @@ pub async fn store_dnf(connection: &SqlitePool, id_election: u32, dnf: &[u8]) ->
     Ok(())
 }
 
-pub async fn store_note(
-    connection: &SqlitePool,
+pub async fn store_note<'e, E: Executor<'e, Database = Sqlite>>(
+    connection: E,
     id_election: u32,
     domain: Fp,
     fvk: &FullViewingKey,
@@ -167,7 +167,7 @@ pub async fn store_note(
     Ok(id)
 }
 
-pub async fn mark_spent(connection: &SqlitePool, id: u32, height: u32) -> Result<()> {
+pub async fn mark_spent<'e, E: Executor<'e, Database = Sqlite>>(connection: E, id: u32, height: u32) -> Result<()> {
     sqlx::query("UPDATE notes SET spent = ? WHERE id_note = ?")
         .bind(height)
         .bind(id)
@@ -217,7 +217,7 @@ pub async fn list_notes(
     Ok(notes)
 }
 
-pub async fn store_cmx(connection: &SqlitePool, id_election: u32, cmx: &[u8]) -> Result<()> {
+pub async fn store_cmx<'e, E: Executor<'e, Database = Sqlite>>(connection: E, id_election: u32, cmx: &[u8]) -> Result<()> {
     sqlx::query("INSERT INTO cmxs(election, hash) VALUES (?, ?)")
         .bind(id_election)
         .bind(cmx)
@@ -226,8 +226,8 @@ pub async fn store_cmx(connection: &SqlitePool, id_election: u32, cmx: &[u8]) ->
     Ok(())
 }
 
-pub async fn store_cmx_root(
-    connection: &SqlitePool,
+pub async fn store_cmx_root<'e, E: Executor<'e, Database = Sqlite>>(
+    connection: E,
     id_election: u32,
     height: u32,
     cmx_root: &[u8],
