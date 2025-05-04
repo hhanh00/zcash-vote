@@ -6,7 +6,7 @@ use sqlx::SqlitePool;
 use tonic::{transport::Endpoint, Request};
 
 use crate::as_byte256;
-use crate::db::mark_spent;
+use crate::db::{mark_spent, store_prop};
 use crate::errors::VoteError;
 use crate::{
     db::store_note,
@@ -21,13 +21,15 @@ pub async fn download_reference_data(
     id_election: u32,
     election: &Election,
     fvk: Option<FullViewingKey>,
-    scope: Scope,
     lwd_url: &str,
     progress: impl Fn(u32) + Send + 'static,
 ) -> Result<u32> {
-    let pivk = fvk.clone().map(|fvk| {
-        let ivk = fvk.to_ivk(scope);
-        PreparedIncomingViewingKey::new(&ivk)
+    let pivks = fvk.clone().map(|fvk| {
+        let ivk = fvk.to_ivk(Scope::External);
+        let pivk1 = PreparedIncomingViewingKey::new(&ivk);
+        let ivk = fvk.to_ivk(Scope::Internal);
+        let pivk2 = PreparedIncomingViewingKey::new(&ivk);
+        (pivk1, pivk2)
     });
     let domain = election.domain();
     let start = election.start_height as u64;
@@ -64,7 +66,7 @@ pub async fn download_reference_data(
                 id_election,
                 domain,
                 fvk.as_ref(),
-                pivk.as_ref(),
+                pivks.as_ref(),
                 position,
                 block,
                 &mut nfs_cache,
@@ -100,25 +102,41 @@ async fn handle_block(
     id_election: u32,
     domain: Fp,
     fvk: Option<&FullViewingKey>,
-    pivk: Option<&PreparedIncomingViewingKey>,
+    pivks: Option<&(PreparedIncomingViewingKey, PreparedIncomingViewingKey)>,
     start_position: usize,
     block: CompactBlock,
     nfs_cache: &mut HashMap<[u8; 32], u32>,
 ) -> Result<usize> {
     let mut position = 0usize;
     for tx in block.vtx {
+        let height = block.height;
         for a in tx.actions {
-            if let Some(pivk) = pivk {
-                if let Some(note) = try_decrypt(pivk, &a)? {
-                    let fvk = fvk.unwrap(); // if we have pivk, we have fvk
-                    let p = start_position + position;
-                    let height = block.height;
-                    let txid = &tx.hash;
+            if let Some((pivk1, pivk2)) = pivks {
+                let fvk = fvk.unwrap(); // if we have pivk, we have fvk
+                let p = start_position + position;
+                let txid = &tx.hash;
+
+                if let Some(note) = try_decrypt(pivk1, &a)? {
                     let id = store_note(
                         connection,
                         0,
                         domain,
                         fvk,
+                        0,
+                        height as u32,
+                        p as u32,
+                        txid,
+                        &note,
+                    ).await?;
+                    nfs_cache.insert(note.nullifier(fvk).to_bytes(), id);
+                }
+                if let Some(note) = try_decrypt(pivk2, &a)? {
+                    let id = store_note(
+                        connection,
+                        0,
+                        domain,
+                        fvk,
+                        1,
                         height as u32,
                         p as u32,
                         txid,
@@ -147,6 +165,7 @@ async fn handle_block(
             position += 1;
         }
     }
+    store_prop(connection, "height", &block.height.to_string()).await?;
 
     Ok(position)
 }
