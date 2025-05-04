@@ -77,6 +77,7 @@ pub async fn create_schema(connection: &SqlitePool) -> Result<()> {
         "CREATE TABLE IF NOT EXISTS notes(
         id_note INTEGER PRIMARY KEY,
         election INTEGER NOT NULL,
+        scope INTEGER NOT NULL,
         position INTEGER NOT NULL UNIQUE,
         height INTEGER NOT NULL,
         txid BLOB NOT NULL,
@@ -132,6 +133,7 @@ pub async fn store_note(
     id_election: u32,
     domain: Fp,
     fvk: &FullViewingKey,
+    scope: u8,
     height: u32,
     position: u32,
     txid: &[u8],
@@ -145,10 +147,11 @@ pub async fn store_note(
     let rho = note.rho().to_bytes();
     let r = sqlx::query(
         "INSERT INTO notes
-        (election, position, height, txid, value, div, rseed, nf, dnf, rho, spent)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)",
+        (election, scope, position, height, txid, value, div, rseed, nf, dnf, rho, spent)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)",
     )
     .bind(id_election)
+    .bind(scope)
     .bind(position)
     .bind(height)
     .bind(txid)
