@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use orchard::keys::{FullViewingKey, PreparedIncomingViewingKey, Scope};
 use pasta_curves::Fp;
-use sqlx::SqlitePool;
+use sqlx::{SqliteConnection, SqlitePool};
 use tonic::{transport::Endpoint, Request};
 
 use crate::as_byte256;
@@ -38,6 +38,7 @@ pub async fn download_reference_data(
 
     let connection2 = connection.clone();
     let task = tokio::spawn(async move {
+        let mut connection2 = connection2.acquire().await?;
         let ep = Endpoint::from_shared(lwd_url)?;
         let mut client = CompactTxStreamerClient::connect(ep).await?;
         let mut blocks = client
@@ -62,7 +63,7 @@ pub async fn download_reference_data(
                 progress(block.height as u32);
             }
             let inc_position = handle_block(
-                &connection2,
+                &mut connection2,
                 id_election,
                 domain,
                 fvk.as_ref(),
@@ -98,7 +99,7 @@ pub async fn download_reference_data(
 }
 
 async fn handle_block(
-    connection: &SqlitePool,
+    connection: &mut SqliteConnection,
     id_election: u32,
     domain: Fp,
     fvk: Option<&FullViewingKey>,
@@ -151,13 +152,13 @@ async fn handle_block(
             sqlx::query("INSERT INTO nfs(election, hash) VALUES (?1, ?2)")
                 .bind(id_election)
                 .bind(nf)
-                .execute(connection)
+                .execute(&mut *connection)
                 .await?;
 
             sqlx::query("INSERT INTO cmxs(election, hash) VALUES (?, ?)")
                 .bind(id_election)
                 .bind(cmx)
-                .execute(connection)
+                .execute(&mut *connection)
                 .await?;
             if let Some(id) = nfs_cache.get(&as_byte256(nf)) {
                 mark_spent(connection, *id, block.height as u32).await?;
