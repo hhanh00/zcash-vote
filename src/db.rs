@@ -180,23 +180,29 @@ pub async fn list_notes(
     connection: &SqlitePool,
     id_election: u32,
     fvk: &FullViewingKey,
-    scope: Scope,
 ) -> Result<Vec<(orchard::Note, u32)>> {
     let notes = sqlx::query(
-        "SELECT position, height, txid, value, div, rseed, nf, dnf, rho
+        "SELECT scope, position, height, txid, value, div, rseed, nf, dnf, rho
         FROM notes WHERE spent IS NULL AND election = ?",
     )
     .bind(id_election)
     .map(|row: SqliteRow| {
-        let position: u32 = row.get(0);
-        let height: u32 = row.get(1);
-        let txid: Vec<u8> = row.get(2);
-        let value: i64 = row.get(3);
-        let div: Vec<u8> = row.get(4);
-        let rseed: Vec<u8> = row.get(5);
-        let nf: Vec<u8> = row.get(6);
-        let dnf: Vec<u8> = row.get(7);
-        let rho: Vec<u8> = row.get(8);
+        let scope: u8 = row.get(0);
+        let position: u32 = row.get(1);
+        let height: u32 = row.get(2);
+        let txid: Vec<u8> = row.get(3);
+        let value: i64 = row.get(4);
+        let div: Vec<u8> = row.get(5);
+        let rseed: Vec<u8> = row.get(6);
+        let nf: Vec<u8> = row.get(7);
+        let dnf: Vec<u8> = row.get(8);
+        let rho: Vec<u8> = row.get(9);
+
+        let scope = if scope == 0 {
+            Scope::External
+        } else {
+            Scope::Internal
+        };
 
         let n = Note {
             position,
