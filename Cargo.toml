@@ -10,9 +10,9 @@ log = "0.4.14"
 futures = "0.3.30"
 futures-core = "0.3.30"
 hex = { version = "0.4.3", features = ["serde"] }
-prost = "0.10.3"
+prost = "0.13.5"
 tokio = { version = "1.6", features = ["rt-multi-thread", "tokio-macros"] }
-tonic = { version = "0.7.2", features = ["tls", "tls-roots"] }
+tonic = {version = "0.13.0", features = ["tls-webpki-roots"]}
 pasta_curves = "0.5"
 blake2b_simd = "1.0.0"
 ff = "0.13"
@@ -41,7 +41,7 @@ zcash_primitives = {version = "0.22", features = ["transparent-inputs"]}
 
 [patch.crates-io]
 #orchard = { path = "../orchard" }
-orchard = {git = "https://github.com/hhanh00/orchard.git", rev="09d63baace476bd79d3defc7e68d59033465c13b"}
+orchard = {git = "https://github.com/hhanh00/orchard.git", rev="75448e671f56f7c6d3f29502f5a26370a056b86c"}
 #halo2_gadgets  = { git = "https://github.com/zcash/halo2.git", rev = "642924d614305d882cc122739c59144109f4bd3f" }
 #halo2_proofs = { git = "https://github.com/zcash/halo2.git", rev = "642924d614305d882cc122739c59144109f4bd3f" }
 
