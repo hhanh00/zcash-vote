@@ -1,41 +1,41 @@
 use anyhow::Result;
 use orchard::vote::{calculate_merkle_paths, Frontier, OrchardHash};
 use pasta_curves::{group::ff::PrimeField as _, Fp};
-use sqlx::{sqlite::SqliteRow, Row, SqlitePool};
+use sqlx::{sqlite::SqliteRow, Row, SqliteConnection};
 
-pub async fn list_nf_ranges(connection: &SqlitePool) -> Result<Vec<Fp>> {
+pub async fn list_nf_ranges(connection: &mut SqliteConnection) -> Result<Vec<Fp>> {
     let mut nfs = sqlx::query("SELECT hash FROM nfs")
     .map(|row: SqliteRow| {
         let v: Vec<u8> = row.get(0);
         let v = Fp::from_repr(v.try_into().unwrap()).unwrap();
         v
     })
-    .fetch_all(connection).await?;
+    .fetch_all(&mut *connection).await?;
     nfs.sort();
     let nf_tree = build_nf_ranges(nfs);
     Ok(nf_tree)
 }
 
-pub async fn compute_nf_root(connection: &SqlitePool) -> Result<OrchardHash> {
+pub async fn compute_nf_root(connection: &mut SqliteConnection) -> Result<OrchardHash> {
     let nf_tree = list_nf_ranges(connection).await?;
     let (nf_root, _) = calculate_merkle_paths(0, &[], &nf_tree);
 
     Ok(OrchardHash(nf_root.to_repr()))
 }
 
-pub async fn list_cmxs(connection: &SqlitePool) -> Result<Vec<Fp>> {
+pub async fn list_cmxs(connection: &mut SqliteConnection) -> Result<Vec<Fp>> {
     let cmx_tree = sqlx::query("SELECT hash FROM cmxs ORDER BY id_cmx")
     .map(|row: SqliteRow| {
         let v: Vec<u8> = row.get(0);
         let v = Fp::from_repr(v.try_into().unwrap()).unwrap();
         v
     })
-    .fetch_all(connection)
+    .fetch_all(&mut *connection)
     .await?;
     Ok(cmx_tree)
 }
 
-pub async fn compute_cmx_root(connection: &SqlitePool) -> Result<(OrchardHash, Option<Frontier>)> {
+pub async fn compute_cmx_root(connection: &mut SqliteConnection) -> Result<(OrchardHash, Option<Frontier>)> {
     let cmx_tree = list_cmxs(connection).await?;
     let (cmx_root, frontier) = if cmx_tree.is_empty() {
         let (cmx_root, _) = calculate_merkle_paths(0, &[], &[]);
