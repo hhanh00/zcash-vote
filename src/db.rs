@@ -6,18 +6,18 @@ use orchard::{
 };
 use pasta_curves::Fp;
 use serde::{Deserialize, Serialize};
-use sqlx::{sqlite::SqliteRow, Row, SqliteConnection, SqlitePool};
+use sqlx::{sqlite::SqliteRow, Row, SqliteConnection};
 
 use crate::as_byte256;
 
-pub async fn create_schema(connection: &SqlitePool) -> Result<()> {
+pub async fn create_schema(connection: &mut SqliteConnection) -> Result<()> {
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS properties(
         id_property INTEGER PRIMARY KEY,
         name TEXT NOT NULL UNIQUE,
         value TEXT NOT NULL)",
     )
-    .execute(connection)
+    .execute(&mut *connection)
     .await?;
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS ballots(
@@ -27,7 +27,7 @@ pub async fn create_schema(connection: &SqlitePool) -> Result<()> {
         hash BLOB NOT NULL UNIQUE,
         data BLOB NOT NULL)",
     )
-    .execute(connection)
+    .execute(&mut *connection)
     .await?;
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS nfs(
@@ -35,7 +35,7 @@ pub async fn create_schema(connection: &SqlitePool) -> Result<()> {
         election INTEGER NOT NULL,
         hash BLOB NOT NULL UNIQUE)",
     )
-    .execute(connection)
+    .execute(&mut *connection)
     .await?;
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS dnfs(
@@ -43,7 +43,7 @@ pub async fn create_schema(connection: &SqlitePool) -> Result<()> {
         election INTEGER NOT NULL,
         hash BLOB NOT NULL UNIQUE)",
     )
-    .execute(connection)
+    .execute(&mut *connection)
     .await?;
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS cmxs(
@@ -51,7 +51,7 @@ pub async fn create_schema(connection: &SqlitePool) -> Result<()> {
         election INTEGER NOT NULL,
         hash BLOB NOT NULL UNIQUE)",
     )
-    .execute(connection)
+    .execute(&mut *connection)
     .await?;
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS cmx_roots(
@@ -61,7 +61,7 @@ pub async fn create_schema(connection: &SqlitePool) -> Result<()> {
         hash BLOB NOT NULL,
         CONSTRAINT u_cmx_roots UNIQUE (election, hash))",
     )
-    .execute(connection)
+    .execute(&mut *connection)
     .await?;
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS cmx_frontiers(
@@ -71,7 +71,7 @@ pub async fn create_schema(connection: &SqlitePool) -> Result<()> {
         frontier TEXT NOT NULL,
         CONSTRAINT u_cmx_frontiers UNIQUE (election, height))",
     )
-    .execute(connection)
+    .execute(&mut *connection)
     .await?;
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS notes(
@@ -89,7 +89,7 @@ pub async fn create_schema(connection: &SqlitePool) -> Result<()> {
         rho BLOB NOT NULL,
         spent INTEGER)",
     )
-    .execute(connection)
+    .execute(&mut *connection)
     .await?;
 
     Ok(())
@@ -177,7 +177,7 @@ pub async fn mark_spent(connection: &mut SqliteConnection, id: u32, height: u32)
 }
 
 pub async fn list_notes(
-    connection: &SqlitePool,
+    connection: &mut SqliteConnection,
     id_election: u32,
     fvk: &FullViewingKey,
 ) -> Result<Vec<(orchard::Note, u32)>> {
@@ -217,7 +217,7 @@ pub async fn list_notes(
         };
         n.to_note(fvk, scope)
     })
-    .fetch_all(connection)
+    .fetch_all(&mut *connection)
     .await?;
 
     Ok(notes)
@@ -227,7 +227,7 @@ pub async fn store_cmx(connection: &mut SqliteConnection, id_election: u32, cmx:
     sqlx::query("INSERT INTO cmxs(election, hash) VALUES (?, ?)")
         .bind(id_election)
         .bind(cmx)
-        .execute(connection)
+        .execute(&mut *connection)
         .await?;
     Ok(())
 }
@@ -246,7 +246,7 @@ pub async fn store_cmx_root(
     .bind(id_election)
     .bind(height)
     .bind(cmx_root)
-    .execute(connection)
+    .execute(&mut *connection)
     .await?;
     Ok(())
 }
