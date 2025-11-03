@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use bip0039::Mnemonic;
+use bip39::Mnemonic;
 use orchard::{
     keys::{FullViewingKey, PreparedIncomingViewingKey, SpendingKey},
     note::{ExtractedNoteCommitment, Nullifier},
@@ -8,14 +8,15 @@ use orchard::{
 };
 use zcash_address::unified::{self, Container, Encoding, Fvk};
 use zcash_note_encryption::{try_compact_note_decryption, EphemeralKeyBytes};
+use zcash_protocol::consensus::{MainNetwork, NetworkConstants};
 
 use crate::{as_byte256, rpc::CompactOrchardAction};
 
 pub fn to_sk(key: &str) -> Result<Option<SpendingKey>> {
-    if let Ok(m) = Mnemonic::from_phrase(key) {
+    if let Ok(m) = Mnemonic::parse(key) {
         let seed = m.to_seed("");
         let spk =
-            SpendingKey::from_zip32_seed(&seed, zcash_primitives::constants::mainnet::COIN_TYPE, 0)
+            SpendingKey::from_zip32_seed(&seed, MainNetwork.coin_type(), 0)
                 .map_err(|_| anyhow!("Failed to derive zip-32"))?;
         return Ok(Some(spk));
     }

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use orchard::keys::{FullViewingKey, PreparedIncomingViewingKey, Scope};
 use pasta_curves::Fp;
-use rusqlite::{params, Connection};
+use sqlx::SqliteConnection;
 use tonic::{transport::Endpoint, Request};
 
 use crate::as_byte256;
@@ -13,17 +13,17 @@ use crate::{
     decrypt::try_decrypt,
     election::Election,
     rpc::{compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange, CompactBlock},
-    PoolConnection, Result,
+    Result,
 };
 
 pub async fn download_reference_data(
-    connection: PoolConnection,
+    mut connection: SqliteConnection,
     id_election: u32,
     election: &Election,
     fvk: Option<FullViewingKey>,
     lwd_url: &str,
     progress: impl Fn(u32) + Send + 'static,
-) -> Result<(PoolConnection, u32)> {
+) -> Result<u32> {
     let pivk = fvk.clone().map(|fvk| {
         let ivk = fvk.to_ivk(Scope::External);
         PreparedIncomingViewingKey::new(&ivk)
@@ -58,7 +58,7 @@ pub async fn download_reference_data(
                 progress(block.height as u32);
             }
             let inc_position = handle_block(
-                &connection,
+                &mut connection,
                 id_election,
                 domain,
                 fvk.as_ref(),
@@ -66,14 +66,14 @@ pub async fn download_reference_data(
                 position,
                 block,
                 &mut nfs_cache,
-            )?;
+            ).await?;
             position += inc_position;
         }
 
         Ok::<_, VoteError>(connection)
     });
 
-    let connection = tokio::spawn(async move {
+    tokio::spawn(async move {
         match task.await {
             Ok(Ok(connection)) => Ok(connection),
             Ok(Err(err)) => {
@@ -90,11 +90,11 @@ pub async fn download_reference_data(
     .await
     .unwrap()?;
 
-    Ok((connection, end as u32))
+    Ok(end as u32)
 }
 
-fn handle_block(
-    connection: &Connection,
+async fn handle_block(
+    connection: &mut SqliteConnection,
     id_election: u32,
     domain: Fp,
     fvk: Option<&FullViewingKey>,
@@ -103,9 +103,6 @@ fn handle_block(
     block: CompactBlock,
     nfs_cache: &mut HashMap<[u8; 32], u32>,
 ) -> Result<usize> {
-    let mut s_cmx =
-        connection.prepare_cached("INSERT INTO cmxs(election, hash) VALUES (?1, ?2)")?;
-    let mut s_nf = connection.prepare_cached("INSERT INTO nfs(election, hash) VALUES (?1, ?2)")?;
     let mut position = 0usize;
     for tx in block.vtx {
         for a in tx.actions {
@@ -124,16 +121,26 @@ fn handle_block(
                         p as u32,
                         txid,
                         &note,
-                    )?;
+                    )
+                    .await?;
                     nfs_cache.insert(note.nullifier(fvk).to_bytes(), id);
                 }
             }
             let nf = &a.nullifier;
             let cmx = &a.cmx;
-            s_nf.execute(params![id_election, nf])?;
-            s_cmx.execute(params![id_election, cmx])?;
+
+            sqlx::query("INSERT INTO nfs(election, hash) VALUES (?1, ?2)")
+                .bind(id_election)
+                .bind(nf)
+                .execute(&mut *connection)
+                .await?;
+            sqlx::query("INSERT INTO cmxs(election, hash) VALUES (?1, ?2)")
+                .bind(id_election)
+                .bind(cmx)
+                .execute(&mut *connection)
+                .await?;
             if let Some(id) = nfs_cache.get(&as_byte256(nf)) {
-                mark_spent(connection, *id, block.height as u32)?;
+                mark_spent(connection, *id, block.height as u32).await?;
             }
             position += 1;
         }

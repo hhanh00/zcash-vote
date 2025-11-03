@@ -1,6 +1,5 @@
 use halo2_proofs::plonk::Error as PlonkError;
 use http::uri::InvalidUri;
-use rusqlite::Error as SqlError;
 use thiserror::Error;
 use tonic::{transport::Error as TonicTransportError, Status};
 
@@ -11,7 +10,7 @@ pub enum VoteError {
     #[error(transparent)]
     TonicTransportError(#[from] TonicTransportError),
     #[error(transparent)]
-    SqlError(#[from] SqlError),
+    SqlError(#[from] sqlx::Error),
     #[error(transparent)]
     PlonkError(#[from] PlonkError),
     #[error(transparent)]
